@@ -1034,3 +1034,138 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- Hosted checkout (public) ---------- */
+.checkout-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px;
+  background: var(--bg);
+}
+
+.checkout__test-banner {
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--test);
+  border: 1px dashed var(--test);
+  border-radius: var(--radius);
+  background: repeating-linear-gradient(-45deg, var(--test-soft), var(--test-soft) 10px, transparent 10px, transparent 20px);
+}
+
+.checkout {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+}
+
+.checkout--test {
+  border-color: var(--test);
+}
+
+.checkout__merchant {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.checkout__amount {
+  font-size: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkout__step {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.checkout__pay {
+  min-height: 46px;
+  font-size: 16px;
+}
+
+.checkout__qr {
+  align-self: center;
+  width: 232px;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.checkout__qr--test {
+  border: 6px solid transparent;
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    repeating-linear-gradient(-45deg, var(--test), var(--test) 8px, #ffffff 8px, #ffffff 16px) border-box;
+}
+
+.qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.checkout__test-note {
+  color: var(--test);
+  font-weight: 600;
+}
+
+.checkout__status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  text-align: left;
+  font-size: 14px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.spinner--inline {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.checkout__final {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checkout__final h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.checkout__final--success h1 {
+  color: var(--success);
+}
+
+.checkout__final--failed h1 {
+  color: var(--danger);
+}
+
+.checkout__footer {
+  margin-top: 16px;
+  max-width: 420px;
+}

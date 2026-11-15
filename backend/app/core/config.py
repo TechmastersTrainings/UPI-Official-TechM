@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     PAYMENT_MIN_EXPIRY_SECONDS: int = 60
     PAYMENT_MAX_EXPIRY_SECONDS: int = 86_400
 
+    # Hosted checkout. Links are {CHECKOUT_BASE_URL}/{token}; defaults to the console's /checkout route.
+    CHECKOUT_BASE_URL: str = ""
+    CHECKOUT_RATE_LIMIT_PER_MINUTE: int = 120  # per client IP, public checkout endpoints
+
     # Background worker (python -m app.workers)
     WORKER_INTERVAL_SECONDS: int = 15
 
@@ -84,6 +88,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def checkout_base_url(self) -> str:
+        return (self.CHECKOUT_BASE_URL or self.FRONTEND_BASE_URL.rstrip("/") + "/checkout").rstrip("/")
 
     @property
     def is_dev_like(self) -> bool:

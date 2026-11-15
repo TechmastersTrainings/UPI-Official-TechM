@@ -49,7 +49,20 @@ Architecture, schema, API spec, provider design, sandbox strategy and the phase 
 - Expiry of unpaid payments, both on read and via the worker (`python -m app.workers`, or `python -m app.cli run-jobs`).
 - Payments list and detail with timeline in the merchant console (with cancel) and the admin console.
 
-Phases 4–8 (UPI/checkout, verification, sandbox, live, reporting) follow the plan in the architecture doc.
+**Phase 4 (UPI & hosted checkout): complete.**
+
+- Provider adapter contract and registry; the registry refuses any non-live-capable adapter for LIVE
+  (checked against both the code and the database).
+- Sandbox adapter (TEST only): generates non-payable `tmsandbox://` QR/intent content.
+- `POST /api/v1/payments/{id}/initiate` for merchants who render their own QR / intent screen. Every payment
+  now has a `checkout_url`.
+- Hosted checkout at `/checkout/{token}`: Pay button → QR (striped "TEST MODE — NO REAL MONEY" frame in sandbox),
+  UPI app button in live, a countdown on the server's clock, and status polling. The page shows only statuses the
+  server returns. The return link carries only `payment_id`, so the merchant must verify the payment server-side.
+- Payments with an open session expire only once the provider confirms nothing was collected.
+- The console payment detail shows provider sessions and the checkout link.
+
+Phases 5–8 (verification, sandbox tools, live, reporting) follow the plan in the architecture doc.
 
 > Live payments are intentionally unreachable today: no live-capable payment provider is integrated yet (Phase 7 needs a
 > signed agreement with an RBI-authorised payment aggregator or acquiring bank), so the readiness checklist cannot complete.
@@ -69,7 +82,7 @@ cp .env.example .env
 .venv/bin/alembic upgrade head
 .venv/bin/python -m app.cli create-superadmin --email you@yourcompany.com --name "Your Name"   # prompts for password
 .venv/bin/uvicorn app.main:app --reload --port 8000
-.venv/bin/python -m app.workers                 # background jobs (payment expiry), in a second terminal
+.venv/bin/python -m app.workers                 # background jobs (payment/session expiry), in a second terminal
 ```
 
 ### Frontend
@@ -111,6 +124,6 @@ so point it at a **dedicated test database**.
 ## Tests
 
 ```bash
-cd backend && .venv/bin/python -m pytest     # 131 tests: migrations, security, auth, RBAC, dashboard, merchant onboarding, payments
+cd backend && .venv/bin/python -m pytest     # 149 tests: migrations, security, auth, RBAC, dashboard, merchant onboarding, payments, checkout
 cd frontend && npm test
 ```

@@ -96,6 +96,7 @@ class PaymentOut(BaseModel):
     notes: dict | None
     failure_code: str | None
     failure_reason: str | None
+    checkout_url: str = Field(description="Hosted checkout page for this payment; share it with the customer")
     expires_at: datetime
     initiated_at: datetime | None
     confirmed_at: datetime | None
@@ -110,7 +111,8 @@ class PaymentOut(BaseModel):
             currency=p.currency, status=p.status, payment_method=p.payment_method,
             customer=CustomerOut(name=p.customer_name, mobile=p.customer_mobile, email=p.customer_email),
             return_url=p.return_url, webhook_url=p.webhook_url, notes=p.notes, failure_code=p.failure_code,
-            failure_reason=p.failure_reason, expires_at=p.expires_at, initiated_at=p.initiated_at,
+            failure_reason=p.failure_reason, checkout_url=f"{get_settings().checkout_base_url}/{p.checkout_token}",
+            expires_at=p.expires_at, initiated_at=p.initiated_at,
             confirmed_at=p.confirmed_at, created_at=p.created_at, updated_at=p.updated_at,
         )
 
@@ -139,13 +141,65 @@ class PaymentEventOut(BaseModel):
     created_at: datetime
 
 
+class AttemptOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    provider_code: str
+    method: str
+    provider_session_ref: str | None
+    status: str
+    expires_at: datetime | None
+    error_message: str | None
+    created_at: datetime
+
+
 class PaymentDetail(PaymentOut):
-    """Console view: the payment plus its full status timeline."""
+    """Console view: the payment plus its provider sessions and full status timeline."""
 
     merchant_id: str
     merchant_name: str | None = None
     provider_code: str | None
+    attempts: list[AttemptOut]
     events: list[PaymentEventOut]
+
+
+class SessionOut(BaseModel):
+    """What the customer needs to pay. In TEST the payloads use the non-payable `tmsandbox://` scheme."""
+
+    attempt_id: str
+    provider_code: str
+    qr_payload: str | None
+    intent_uri: str | None
+    redirect_url: str | None
+    expires_at: datetime | None
+
+    @classmethod
+    def of(cls, a) -> "SessionOut":
+        return cls(attempt_id=a.id, provider_code=a.provider_code, qr_payload=a.qr_payload, intent_uri=a.intent_uri,
+                   redirect_url=a.redirect_url, expires_at=a.expires_at)
+
+
+class PaymentSession(BaseModel):
+    payment: PaymentOut
+    session: SessionOut
+
+
+class CheckoutView(BaseModel):
+    """Public checkout view model. Contains no customer PII and no secrets. `status` is exactly the
+    server's status; the page never infers success on its own."""
+
+    payment_id: str
+    merchant_name: str
+    reference: str
+    amount: int
+    currency: str
+    status: str
+    environment: str
+    payment_method: str
+    expires_at: datetime
+    server_time: datetime
+    session: SessionOut | None = Field(None, description="Present while the payment is awaiting the customer")
+    return_url: str | None = Field(None, description="Present once the payment has reached a final status")
 
 
 class PaymentListItem(BaseModel):

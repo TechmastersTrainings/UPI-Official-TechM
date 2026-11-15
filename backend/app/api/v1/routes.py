@@ -8,8 +8,16 @@ from app.api.v1.deps import ApiClient, get_api_client, idempotency_key
 from app.db.session import get_db
 from app.models.enums import EventSource, PaymentStatus
 from app.schemas.admin import Page
-from app.schemas.payment import PaymentCancel, PaymentCreate, PaymentListItem, PaymentOut, PaymentStatusOut
-from app.services import payments
+from app.schemas.payment import (
+    PaymentCancel,
+    PaymentCreate,
+    PaymentListItem,
+    PaymentOut,
+    PaymentSession,
+    PaymentStatusOut,
+    SessionOut,
+)
+from app.services import checkout, payments
 
 router = APIRouter(prefix="/api/v1", tags=["Gateway API"])
 
@@ -85,3 +93,15 @@ def cancel_payment(
     p = payments.cancel(db, p, source=EventSource.MERCHANT_API, reason=body.reason if body else None,
                         actor=client.credential.key_id)
     return PaymentOut.of(p)
+
+
+@router.post("/payments/{payment_id}/initiate", response_model=PaymentSession)
+def initiate_payment(payment_id: str, client: ApiClient = Depends(get_api_client), db: Session = Depends(get_db)):
+    """Open a provider session and get the UPI QR content / intent link to show your customer
+    (for `UPI_QR` / `UPI_INTENT` integrations that render their own payment screen). Safe to retry:
+    if a session is already open it is returned. Use `checkout_url` instead to let TechMasters host
+    the payment page."""
+    p = payments.get_scoped(db, client.merchant.id, client.environment, payment_id)
+    attempt = checkout.open_session(db, p, source=EventSource.MERCHANT_API)
+    db.refresh(p)
+    return PaymentSession(payment=PaymentOut.of(p), session=SessionOut.of(attempt))

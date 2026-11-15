@@ -41,6 +41,9 @@ export default function PaymentDetail({ payment: p, showMerchant }) {
             <Row label="Created">{formatDateTime(p.created_at)}</Row>
             <Row label="Expires">{formatDateTime(p.expires_at)}</Row>
             <Row label="Confirmed">{p.confirmed_at && formatDateTime(p.confirmed_at)}</Row>
+            <Row label="Checkout link">
+              <a href={p.checkout_url} target="_blank" rel="noreferrer">Open checkout</a>
+            </Row>
           </dl>
         </section>
         <section className="card">
@@ -62,6 +65,39 @@ export default function PaymentDetail({ payment: p, showMerchant }) {
           )}
         </section>
       </div>
+
+      {p.attempts?.length > 0 && (
+        <section className="card">
+          <div className="card__header"><h2>Provider sessions</h2></div>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Session</th>
+                  <th>Provider</th>
+                  <th>Status</th>
+                  <th>Opened</th>
+                  <th>Expires</th>
+                </tr>
+              </thead>
+              <tbody>
+                {p.attempts.map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      <span className="mono small">{a.provider_session_ref || a.id}</span>
+                      {a.error_message && <div className="muted small">{a.error_message}</div>}
+                    </td>
+                    <td>{a.provider_code}</td>
+                    <td><StatusBadge status={a.status} /></td>
+                    <td className="nowrap">{formatDateTime(a.created_at)}</td>
+                    <td className="nowrap">{formatDateTime(a.expires_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <div className="card__header"><h2>Timeline</h2></div>

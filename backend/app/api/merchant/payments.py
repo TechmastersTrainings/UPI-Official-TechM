@@ -9,8 +9,8 @@ from app.db.session import get_db
 from app.models.enums import ActorType, EventSource, PaymentStatus
 from app.schemas.admin import Page
 from app.schemas.merchant import Env
-from app.schemas.payment import PaymentCancel, PaymentDetail, PaymentEventOut, PaymentListItem, PaymentOut
-from app.services import audit, payments
+from app.schemas.payment import AttemptOut, PaymentCancel, PaymentDetail, PaymentEventOut, PaymentListItem, PaymentOut
+from app.services import audit, checkout, payments
 from app.services.rbac import Perm
 
 router = APIRouter(prefix="/api/merchant/payments", tags=["Merchant console"])
@@ -21,6 +21,7 @@ def detail(db: Session, p, merchant_name: str | None = None) -> PaymentDetail:
     base = PaymentOut.of(p).model_dump()
     return PaymentDetail(
         **base, merchant_id=p.merchant_id, merchant_name=merchant_name, provider_code=p.provider_code,
+        attempts=[AttemptOut.model_validate(a) for a in checkout.attempts(db, p.id)],
         events=[PaymentEventOut.model_validate(e) for e in payments.events(db, p.id)],
     )
 
