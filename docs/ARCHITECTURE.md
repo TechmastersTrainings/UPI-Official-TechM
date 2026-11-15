@@ -1,7 +1,7 @@
 # TechMasters Payment Gateway — Architecture
 
 Owner: TechMasters Innovations Private Limited
-Status: Phases 1 (Foundation), 2 (Merchant management) and 3 (Payment engine) implemented. Later phases are specified here and built incrementally.
+Status: Phases 1 (Foundation), 2 (Merchant management), 3 (Payment engine) and 4 (UPI & checkout) implemented. Later phases are specified here and built incrementally.
 
 This document is the reference for the eight pre-implementation deliverables:
 directory structure, backend architecture, frontend architecture, database schema,
@@ -95,7 +95,7 @@ process and CLI reuse them unchanged.
 | Process | Command | Role |
 |---|---|---|
 | API | `uvicorn app.main:app --port 8000` | All HTTP endpoints |
-| Worker | `python -m app.workers` | Payment expiry (Phase 3); status polling, webhook retries, reconciliation imports (Phase 5+) |
+| Worker | `python -m app.workers` | Payment expiry (Phase 3), provider-confirmed expiry of open sessions (Phase 4); status polling, webhook retries, reconciliation imports (Phase 5+) |
 
 **Durable jobs.** The database is the queue of record: `webhook_deliveries.next_attempt_at`,
 pending payments (`status IN (INITIATED, PENDING, PROCESSING)`) and settlement imports are
@@ -250,7 +250,7 @@ test, transactions, refunds, request logs.
 ### 5.4 Public gateway API — `/api/v1` (Phase 3 +, Basic auth with API key)
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/v1/payments/create` | `Idempotency-Key` required; returns the payment (`checkout_url` added in Phase 4) |
+| POST | `/api/v1/payments/create` | `Idempotency-Key` required; returns the payment incl. `checkout_url` |
 | GET | `/api/v1/payments` | paginated list in the key's environment (Phase 3) |
 | POST | `/api/v1/payments/{payment_id}/cancel` | only from `CREATED`; safe to retry (Phase 3) |
 | POST | `/api/v1/payments/{payment_id}/initiate` | opens provider session; returns QR / intent / redirect |
@@ -261,7 +261,8 @@ test, transactions, refunds, request logs.
 | GET | `/api/v1/transactions` | paginated, filterable |
 | POST | `/api/v1/webhooks/test` | sends signed `webhook.test` event |
 | POST | `/api/v1/providers/{code}/callback` | provider → gateway (signature verified, unauthenticated by key) |
-| GET | `/api/v1/checkout/{token}` | public checkout view model (no secrets, no PII beyond what's needed) |
+| GET | `/api/v1/checkout/{token}` | public checkout view model (no secrets, no customer PII; rate-limited per IP) |
+| POST | `/api/v1/checkout/{token}/initiate` | customer clicked Pay: opens or reuses the provider session (Phase 4) |
 
 Create-payment body: `merchant_reference`, `order_reference`, `amount` (integer paise),
 `currency` (`INR`), `customer{name,mobile,email}`, `payment_method` (`UPI_QR`|`UPI_INTENT`|
@@ -277,6 +278,12 @@ redeliver is available from the dashboard.
 ---
 
 ## 6. Payment provider integration architecture (Phase 4)
+
+Implemented in `app/providers/` (`base.py` contract, `registry.py`, `sandbox.py`). Phase 4 uses
+`create_session` (opening a UPI QR / intent session, idempotently, under a row lock plus optimistic
+locking) and `fetch_status` for expiry only: a payment with an open session expires only when the
+provider reports the session closed with nothing collected. Every other provider answer, including
+success, is left for the Phase 5 verification engine.
 
 ```python
 class PaymentProvider(Protocol):
@@ -330,7 +337,7 @@ class PaymentProvider(Protocol):
 | **1 Foundation** ✅ | Structure, FastAPI, DB + Alembic, auth (JWT/refresh/RBAC/lockout/rate limit), audit log, platform users, Super Admin dashboard on real aggregates, React shell with theme | Tests green; login → dashboard works end-to-end |
 | **2 Merchant management** ✅ | Registration, profile, bank accounts (encrypted), provider configs, API credentials, webhook config, admin approval | Merchant can self-register; admin approves; keys issued once |
 | **3 Payment engine** ✅ | `/api/v1` payments, idempotency, state machine, expiry, events | Concurrency + idempotency tests pass |
-| 4 UPI & checkout | Provider interface, sandbox adapter, QR/intent, hosted checkout + countdown | Checkout renders only server-verified states |
+| **4 UPI & checkout** ✅ | Provider interface, sandbox adapter, QR/intent, hosted checkout + countdown | Checkout renders only server-verified states |
 | 5 Verification | Status polling worker, callback verification, ledger, outbound webhooks + retries | Duplicate callbacks are no-ops; webhooks signed + retried |
 | 6 Sandbox | Test scenarios, simulate panel, webhook tester, refund simulation | Full sandbox lifecycle E2E test |
 | 7 Live | First real provider adapter (needs signed provider agreement + docs), live gating, settlement import | Provider contract tests vs provider sandbox |
