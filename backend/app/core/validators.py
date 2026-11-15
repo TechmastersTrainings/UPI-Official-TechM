@@ -103,3 +103,22 @@ def validate_webhook_url(url: str, *, environment: str, allow_insecure_local: bo
     if local and not relaxed:
         raise ValueError("must be a publicly reachable host")
     return v
+
+
+def validate_return_url(url: str, *, environment: str) -> str:
+    """Where the customer's browser is sent after checkout. It is a navigation target only and is
+    never treated as proof of payment. LIVE requires https."""
+    v = url.strip()
+    p = urlparse(v)
+    if not p.hostname or p.scheme not in ("http", "https"):
+        raise ValueError("must be a full http(s) URL")
+    if p.username or p.password:
+        raise ValueError("must not contain credentials")
+    if environment == "LIVE" and p.scheme != "https":
+        raise ValueError("must use https in live mode")
+    return v
+
+
+def same_origin(a: str, b: str) -> bool:
+    pa, pb = urlparse(a), urlparse(b)
+    return (pa.scheme, (pa.hostname or "").lower(), pa.port) == (pb.scheme, (pb.hostname or "").lower(), pb.port)

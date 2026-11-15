@@ -58,23 +58,27 @@ def _envelope(status: int, code: str, message: str, details=None, headers=None) 
 
 def install_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
-    async def _app_error(_: Request, exc: AppError):
+    async def _app_error(request: Request, exc: AppError):
+        request.state.error_code = exc.code
         headers = {"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None
         return _envelope(exc.status_code, exc.code, exc.message, exc.details, headers)
 
     @app.exception_handler(RequestValidationError)
-    async def _validation(_: Request, exc: RequestValidationError):
+    async def _validation(request: Request, exc: RequestValidationError):
+        request.state.error_code = "VALIDATION_ERROR"
         details = [
             {"field": ".".join(str(p) for p in e["loc"] if p != "body"), "message": e["msg"]} for e in exc.errors()
         ]
         return _envelope(422, "VALIDATION_ERROR", "Request validation failed", details)
 
     @app.exception_handler(StarletteHTTPException)
-    async def _http(_: Request, exc: StarletteHTTPException):
+    async def _http(request: Request, exc: StarletteHTTPException):
         code = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}.get(exc.status_code, "HTTP_ERROR")
+        request.state.error_code = code
         return _envelope(exc.status_code, code, str(exc.detail))
 
     @app.exception_handler(Exception)
-    async def _unhandled(_: Request, exc: Exception):
+    async def _unhandled(request: Request, exc: Exception):
+        request.state.error_code = "INTERNAL_ERROR"
         log.exception("unhandled_exception")
         return _envelope(500, "INTERNAL_ERROR", "An internal error occurred")

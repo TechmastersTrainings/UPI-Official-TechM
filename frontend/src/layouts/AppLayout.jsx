@@ -8,7 +8,9 @@ import { humanize } from '../utils/format';
 const NAV = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: '▦', perm: 'dashboard:view' },
   { to: '/admin/merchants', label: 'Merchants', icon: '▤', perm: 'merchants:view' },
+  { to: '/admin/payments', label: 'Payments', icon: '₹', perm: 'payments:view' },
   { to: '/merchant/overview', label: 'Overview', icon: '▦', perm: 'merchant:view' },
+  { to: '/merchant/payments', label: 'Payments', icon: '⇵', perm: 'merchant:payments_view' },
   { to: '/merchant/profile', label: 'Business profile', icon: '▤', perm: 'merchant:view' },
   { to: '/merchant/bank-accounts', label: 'Bank accounts', icon: '₹', perm: 'merchant:bank_view' },
   { to: '/merchant/providers', label: 'Payment providers', icon: '⇄', perm: 'merchant:view' },

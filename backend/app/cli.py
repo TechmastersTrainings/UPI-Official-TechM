@@ -46,6 +46,13 @@ def _create_superadmin(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_jobs(_args) -> int:
+    from app.workers import run_once
+
+    print(run_once())
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -57,6 +64,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--name", required=True)
     p.add_argument("--password-stdin", action="store_true", help="Read password from stdin (for automation)")
     p.set_defaults(func=_create_superadmin)
+
+    sub.add_parser("run-jobs", help="Run the background jobs once (payment expiry)").set_defaults(func=_run_jobs)
 
     args = parser.parse_args(argv)
     return args.func(args)

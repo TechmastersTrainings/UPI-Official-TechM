@@ -37,7 +37,19 @@ Architecture, schema, API spec, provider design, sandbox strategy and the phase 
 - Super Admin merchant console: search/filter, approve/reject/suspend/reactivate, bank verification, provider approval,
   and live mode gated by a 7-item readiness checklist.
 
-Phases 3–8 (payment engine, UPI/checkout, verification, sandbox, live, reporting) follow the plan in the architecture doc.
+**Phase 3 (Payment engine): complete.**
+
+- Gateway API `/api/v1` with HTTP Basic API-key auth (the key selects TEST or LIVE), per-key rate limit,
+  auth-failure throttling and a per-merchant access log.
+- `POST /payments/create` with mandatory `Idempotency-Key`: identical retries replay the original payment,
+  a different body under the same key returns `409 IDEMPOTENCY_CONFLICT`; `merchant_reference` unique per environment.
+  Races are settled by database unique constraints.
+- Get / status / list / cancel. Payment state machine with allowed transitions *and* allowed sources (only the
+  provider can ever mark a payment `SUCCESS`), an immutable event timeline, and optimistic locking.
+- Expiry of unpaid payments, both on read and via the worker (`python -m app.workers`, or `python -m app.cli run-jobs`).
+- Payments list and detail with timeline in the merchant console (with cancel) and the admin console.
+
+Phases 4–8 (UPI/checkout, verification, sandbox, live, reporting) follow the plan in the architecture doc.
 
 > Live payments are intentionally unreachable today: no live-capable payment provider is integrated yet (Phase 7 needs a
 > signed agreement with an RBI-authorised payment aggregator or acquiring bank), so the readiness checklist cannot complete.
@@ -57,6 +69,7 @@ cp .env.example .env
 .venv/bin/alembic upgrade head
 .venv/bin/python -m app.cli create-superadmin --email you@yourcompany.com --name "Your Name"   # prompts for password
 .venv/bin/uvicorn app.main:app --reload --port 8000
+.venv/bin/python -m app.workers                 # background jobs (payment expiry), in a second terminal
 ```
 
 ### Frontend
@@ -98,6 +111,6 @@ so point it at a **dedicated test database**.
 ## Tests
 
 ```bash
-cd backend && .venv/bin/python -m pytest     # 73 tests: migrations, security, auth, RBAC, dashboard, merchant onboarding
+cd backend && .venv/bin/python -m pytest     # 131 tests: migrations, security, auth, RBAC, dashboard, merchant onboarding, payments
 cd frontend && npm test
 ```

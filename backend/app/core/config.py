@@ -47,6 +47,21 @@ class Settings(BaseSettings):
     LOGIN_LOCKOUT_SECONDS: int = 900
     LOGIN_RATE_LIMIT_PER_MINUTE: int = 10
 
+    # Gateway API (/api/v1)
+    API_RATE_LIMIT_PER_MINUTE: int = 300  # per API key
+    API_AUTH_FAILURES_PER_MINUTE: int = 20  # per client IP
+
+    # Payments. Amounts are in paise. The default ceiling is the standard UPI per-transaction
+    # limit (₹1,00,000); raise it only for merchant categories the provider allows higher limits for.
+    PAYMENT_MIN_AMOUNT: int = 100
+    PAYMENT_MAX_AMOUNT: int = 10_000_000
+    PAYMENT_DEFAULT_EXPIRY_SECONDS: int = 900
+    PAYMENT_MIN_EXPIRY_SECONDS: int = 60
+    PAYMENT_MAX_EXPIRY_SECONDS: int = 86_400
+
+    # Background worker (python -m app.workers)
+    WORKER_INTERVAL_SECONDS: int = 15
+
     @field_validator("DATABASE_SSL_CA", "COOKIE_DOMAIN", "REDIS_URL", mode="before")
     @classmethod
     def _blank_to_none(cls, v):
