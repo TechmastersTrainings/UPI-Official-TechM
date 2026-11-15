@@ -247,6 +247,7 @@ class ApiAccessToggle(BaseModel):
 WEBHOOK_EVENTS = (
     "payment.created", "payment.initiated", "payment.pending", "payment.success", "payment.failed",
     "payment.expired", "payment.refund_initiated", "payment.refunded", "settlement.updated", "payment.cancelled",
+    "payment.refund_failed",
 )
 WebhookEvent = Literal[WEBHOOK_EVENTS]  # type: ignore[valid-type]
 

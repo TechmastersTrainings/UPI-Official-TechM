@@ -74,7 +74,7 @@ def _new_event_id() -> str:
     return "evt_" + secrets.token_urlsafe(18)
 
 
-def enqueue_payment_event(db: Session, payment: Payment, event_type: str) -> WebhookDelivery | None:
+def enqueue_payment_event(db: Session, payment: Payment, event_type: str, *, extra: dict | None = None) -> WebhookDelivery | None:
     """Queue `event_type` for the payment's merchant if they subscribed to it. Not committed here."""
     cfg = _config(db, payment.merchant_id, payment.environment)
     if cfg is None or not cfg.is_active or event_type not in (cfg.events or []):
@@ -88,7 +88,7 @@ def enqueue_payment_event(db: Session, payment: Payment, event_type: str) -> Web
         "type": event_type,
         "created_at": now.isoformat(),
         "environment": payment.environment,
-        "data": {"payment": PaymentOut.of(payment).model_dump(mode="json")},
+        "data": {"payment": PaymentOut.of(payment).model_dump(mode="json")} | (extra or {}),
     }
     delivery = WebhookDelivery(
         event_id=event_id, event_type=event_type, merchant_id=payment.merchant_id, environment=payment.environment,
@@ -99,10 +99,10 @@ def enqueue_payment_event(db: Session, payment: Payment, event_type: str) -> Web
     return delivery
 
 
-def enqueue_for_status(db: Session, payment: Payment, status: str) -> None:
+def enqueue_for_status(db: Session, payment: Payment, status: str, *, extra: dict | None = None) -> None:
     event = STATUS_EVENTS.get(status)
     if event:
-        enqueue_payment_event(db, payment, event)
+        enqueue_payment_event(db, payment, event, extra=extra)
 
 
 def serialize(payload: dict) -> bytes:

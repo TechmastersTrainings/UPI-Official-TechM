@@ -20,6 +20,7 @@ from app.models.payment import (
     Transaction,
     WebhookDelivery,
 )
+from app.models.sandbox import SandboxSimulation
 from app.models.settlement import ReconciliationRecord, Settlement
 
 __all__ = [
@@ -38,6 +39,7 @@ __all__ = [
     "ReconciliationRecord",
     "Refund",
     "Role",
+    "SandboxSimulation",
     "Settlement",
     "Transaction",
     "User",

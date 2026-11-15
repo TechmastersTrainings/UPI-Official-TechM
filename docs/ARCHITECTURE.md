@@ -1,7 +1,7 @@
 # TechMasters Payment Gateway — Architecture
 
 Owner: TechMasters Innovations Private Limited
-Status: Phases 1 (Foundation), 2 (Merchant management), 3 (Payment engine), 4 (UPI & checkout) and 5 (Verification) implemented. Later phases are specified here and built incrementally.
+Status: Phases 1 (Foundation), 2 (Merchant management), 3 (Payment engine), 4 (UPI & checkout), 5 (Verification) and 6 (Sandbox & refunds) implemented. Later phases are specified here and built incrementally.
 
 This document is the reference for the eight pre-implementation deliverables:
 directory structure, backend architecture, frontend architecture, database schema,
@@ -257,7 +257,9 @@ test, transactions, refunds, request logs.
 | GET | `/api/v1/payments/{payment_id}` | full payment |
 | GET | `/api/v1/payments/{payment_id}/status` | lightweight status |
 | POST | `/api/v1/payments/{payment_id}/verify` | forces provider status check (server-to-server) |
-| POST | `/api/v1/refunds` | `Idempotency-Key` required; full/partial |
+| POST | `/api/v1/refunds` | `Idempotency-Key` required; full/partial; one in progress per payment (Phase 6) |
+| GET | `/api/v1/refunds/{id}`, `/api/v1/payments/{id}/refunds` | refund status (Phase 6) |
+| POST | `/api/v1/payments/{id}/simulate` | sandbox only (Phase 6) |
 | GET | `/api/v1/transactions` | paginated, filterable |
 | POST | `/api/v1/webhooks/test` | sends signed `webhook.test` event |
 | POST | `/api/v1/providers/{code}/callback` | provider → gateway (signature verified, unauthenticated by key) |
@@ -330,21 +332,30 @@ class PaymentProvider(Protocol):
 
 ## 7. Sandbox testing strategy (Phase 6)
 
-* Sandbox merchant + `tm_test_` credentials are created automatically on registration.
-* The `sandbox` provider generates a **non-payable** QR. Its content is a
-  `tmsandbox://pay?...` URI rather than `upi://`, so no UPI app can act on it. It's
-  rendered with a striped "TEST MODE — NO REAL MONEY" frame and banner.
-* Outcomes are controlled by the **amount's paise** (documented test values), e.g.
-  `…00` → SUCCESS, `…01` → FAILED, `…02` → stays PENDING, `…03` → EXPIRED. There's also a
-  "Simulate" panel on the test checkout that calls a TEST-only endpoint. Both paths go
-  through the same callback → verification → state machine → webhook pipeline as live, so the
-  real code path is exercised.
-* Sandbox refunds settle through the same simulated provider. Live refunds never use it.
-* Automated tests: unit (state machine, signature, idempotency, encryption), API integration
-  (pytest + TestClient against SQLite and, in CI, MySQL 8), and end-to-end sandbox lifecycle
-  tests (create → initiate → callback → verify → webhook delivered → refund → reconcile).
-
----
+* Every merchant gets a TEST-only sandbox provider configuration on registration; they generate
+  `tm_test_` keys in the console.
+* The `sandbox` adapter generates a **non-payable** QR. Its content is a `tmsandbox://pay?...` URI
+  rather than `upi://`, so no UPI app can act on it. The checkout renders it with a striped
+  "TEST MODE — NO REAL MONEY" frame and banner.
+* The simulator keeps its own provider-side state (`sandbox_simulations`), separate from gateway
+  tables. The gateway learns outcomes only through the adapter's status API and signed callbacks,
+  and the first decided outcome is final, so polls and callbacks always agree.
+* Outcomes by the amount's paise, decided `SANDBOX_AUTO_OUTCOME_SECONDS` (default 8) after the
+  session opens and discovered by status polling: `x.00` → SUCCESS, `x.01` → FAILED, `x.02` →
+  PROCESSING (stays), `x.03` → nothing (expires at the deadline), anything else → no automatic
+  outcome. Refunds succeed, except refund amounts ending `.01`, which fail.
+* **Simulate** (checkout panel `POST /api/v1/checkout/{token}/simulate`, or
+  `POST /api/v1/payments/{id}/simulate` with a test key): decides the outcome on the simulator,
+  which then sends its signed callback through the normal callback pipeline (signature → dedupe →
+  verification → state machine → ledger → webhooks). Refused for LIVE payments.
+* Refunds (`POST /api/v1/refunds`, console Refund button) use the same provider interface
+  (`create_refund`, `fetch_refund_status`) as live; sandbox refunds never touch a live provider.
+* Webhook tester: "Send test event" in the console (or `POST /api/v1/webhooks/test`), plus the
+  delivery log with payloads and redelivery.
+* Automated tests: unit (state machine, signatures, idempotency, encryption), API integration
+  (pytest + TestClient against SQLite; MySQL 8 via `TEST_DATABASE_URL`), concurrency races, and
+  `test_full_sandbox_lifecycle` (create → checkout → simulated payment → verify → webhooks
+  delivered → partial refund → full refund). Reconciliation joins in Phase 8.
 
 ## 8. Development phases
 
@@ -355,7 +366,7 @@ class PaymentProvider(Protocol):
 | **3 Payment engine** ✅ | `/api/v1` payments, idempotency, state machine, expiry, events | Concurrency + idempotency tests pass |
 | **4 UPI & checkout** ✅ | Provider interface, sandbox adapter, QR/intent, hosted checkout + countdown | Checkout renders only server-verified states |
 | **5 Verification** ✅ | Status polling worker, callback verification, ledger, outbound webhooks + retries | Duplicate callbacks are no-ops; webhooks signed + retried |
-| 6 Sandbox | Test scenarios, simulate panel, webhook tester, refund simulation | Full sandbox lifecycle E2E test |
+| **6 Sandbox** ✅ | Test scenarios, simulate panel, webhook tester, refund simulation | Full sandbox lifecycle E2E test |
 | 7 Live | First real provider adapter (needs signed provider agreement + docs), live gating, settlement import | Provider contract tests vs provider sandbox |
 | 8 Reporting & admin | Transaction reports/CSV, refunds UI, settlements, reconciliation, audit viewer filters | Reconciliation exception flow tested |
 

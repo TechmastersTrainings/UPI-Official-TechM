@@ -162,6 +162,8 @@ class Refund(Base, TimestampMixin):
     provider_refund_ref: Mapped[str | None] = mapped_column(String(100), nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     processed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    next_poll_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), index=True, nullable=True)
+    poll_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     initiated_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
 

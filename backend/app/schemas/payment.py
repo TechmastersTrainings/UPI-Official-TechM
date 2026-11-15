@@ -162,6 +162,7 @@ class PaymentDetail(PaymentOut):
     attempts: list[AttemptOut]
     events: list[PaymentEventOut]
     transactions: list["TransactionOut"] = []
+    refunds: list["RefundOut"] = []
     webhook_deliveries: list["WebhookDeliveryOut"] = []
 
 
@@ -270,6 +271,43 @@ class WebhookDeliveryOut(BaseModel):
 
 class WebhookDeliveryDetail(WebhookDeliveryOut):
     payload: dict
+
+
+
+class RefundCreate(BaseModel):
+    """Refund a paid payment, fully (omit `amount`) or partially. One refund can be in progress per payment."""
+
+    model_config = ConfigDict(extra="forbid")
+    payment_id: Annotated[str, StringConstraints(min_length=1, max_length=32)]
+    amount: int | None = Field(None, ge=1, description="Paise; defaults to the full refundable amount")
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] | None = None
+
+
+class ConsoleRefundCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    amount: int | None = Field(None, ge=1)
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] | None = None
+
+
+class RefundOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    payment_id: str
+    environment: str
+    amount: int
+    currency: str
+    status: str
+    reason: str | None
+    provider_refund_ref: str | None
+    failure_reason: str | None
+    processed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SimulateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    outcome: Literal["SUCCESS", "FAILED", "PROCESSING"]
 
 
 PaymentDetail.model_rebuild()

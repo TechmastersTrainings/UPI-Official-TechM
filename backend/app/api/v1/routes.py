@@ -18,12 +18,15 @@ from app.schemas.payment import (
     PaymentSession,
     PaymentStatusOut,
     SessionOut,
+    RefundCreate,
+    RefundOut,
+    SimulateRequest,
     TransactionOut,
     WebhookDeliveryOut,
 )
 from app.core import rate_limit
 from app.models import Transaction
-from app.services import callbacks, checkout, payments, verification, webhooks
+from app.services import callbacks, checkout, payments, refunds, sandbox_tools, verification, webhooks
 
 router = APIRouter(prefix="/api/v1", tags=["Gateway API"])
 
@@ -144,6 +147,46 @@ def send_test_webhook(client: ApiClient = Depends(get_api_client), db: Session =
     """Send a signed `webhook.test` event to your registered endpoint now and return the result.
     A 2xx response marks the endpoint as validated (required for live mode)."""
     return WebhookDeliveryOut.model_validate(webhooks.send_test(db, client.merchant.id, client.environment))
+
+
+@router.post("/refunds", response_model=RefundOut, status_code=201,
+             responses={200: {"description": "Replay of an earlier request with the same Idempotency-Key and body"}})
+def create_refund(
+    body: RefundCreate,
+    response: Response,
+    client: ApiClient = Depends(get_api_client),
+    key: str = Depends(idempotency_key),
+    db: Session = Depends(get_db),
+):
+    """Refund a paid payment, fully (omit `amount`) or partially. Requires `Idempotency-Key`.
+    The refund starts as PROCESSING; its result comes from the provider (webhooks
+    `payment.refunded` / `payment.refund_failed`, or poll `GET /refunds/{id}`)."""
+    refund, replayed = refunds.create(db, client.merchant, client.environment, body, key, source=EventSource.MERCHANT_API)
+    if replayed:
+        response.status_code = 200
+        response.headers["Idempotent-Replayed"] = "true"
+    return RefundOut.model_validate(refund)
+
+
+@router.get("/refunds/{refund_id}", response_model=RefundOut)
+def get_refund(refund_id: str, client: ApiClient = Depends(get_api_client), db: Session = Depends(get_db)):
+    return RefundOut.model_validate(refunds.get_scoped(db, client.merchant.id, client.environment, refund_id))
+
+
+@router.get("/payments/{payment_id}/refunds", response_model=list[RefundOut])
+def list_payment_refunds(payment_id: str, client: ApiClient = Depends(get_api_client), db: Session = Depends(get_db)):
+    p = payments.get_scoped(db, client.merchant.id, client.environment, payment_id)
+    return [RefundOut.model_validate(r) for r in refunds.for_payment(db, p.id)]
+
+
+@router.post("/payments/{payment_id}/simulate", response_model=PaymentOut, tags=["Sandbox"])
+def simulate_payment(payment_id: str, body: SimulateRequest, client: ApiClient = Depends(get_api_client),
+                     db: Session = Depends(get_db)):
+    """**Sandbox only.** Decide the outcome of an opened TEST payment on the simulated provider. The
+    simulator then sends its signed callback through the normal verification pipeline, so your
+    webhooks fire exactly as they would in live mode."""
+    p = payments.get_scoped(db, client.merchant.id, client.environment, payment_id)
+    return PaymentOut.of(sandbox_tools.simulate(db, p, body.outcome))
 
 
 callback_router = APIRouter(prefix="/api/v1/providers", tags=["Provider callbacks"])
