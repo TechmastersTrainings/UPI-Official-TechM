@@ -46,6 +46,15 @@ export const merchantApi = {
   webhooks: () => api.get('/api/merchant/webhooks').then((r) => r.data),
   saveWebhook: (env, body) => api.put(`/api/merchant/webhooks/${env}`, body).then((r) => r.data),
   rotateWebhookSecret: (env) => api.post(`/api/merchant/webhooks/${env}/rotate-secret`).then((r) => r.data),
+
+  payments: (params) => api.get('/api/merchant/payments', { params }).then((r) => r.data),
+  payment: (id) => api.get(`/api/merchant/payments/${id}`).then((r) => r.data),
+  cancelPayment: (id, reason) => api.post(`/api/merchant/payments/${id}/cancel`, { reason }).then((r) => r.data),
+};
+
+export const adminPaymentApi = {
+  list: (params) => api.get('/api/admin/payments', { params }).then((r) => r.data),
+  detail: (id) => api.get(`/api/admin/payments/${id}`).then((r) => r.data),
 };
 
 export const adminMerchantApi = {

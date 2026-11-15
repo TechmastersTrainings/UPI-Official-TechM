@@ -5,19 +5,46 @@ import uuid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import text
 
 from app.api.admin.merchants import router as admin_merchants_router
 from app.api.admin.routes import router as admin_router
 from app.api.auth.routes import router as auth_router
+from app.api.admin.payments import router as admin_payments_router
+from app.api.merchant.payments import router as merchant_payments_router
 from app.api.merchant.routes import router as merchant_router
+from app.api.v1.routes import router as v1_router
 from app.core.config import get_settings
 from app.core.errors import install_exception_handlers
 from app.core.logging import configure_logging, request_id_ctx
 from app.core.redis import redis_healthy
-from app.db.session import get_engine
+from app.db.session import get_engine, get_sessionmaker
+from app.models import ApiRequestLog
 
 log = logging.getLogger("app.request")
+API_PREFIX = "/api/v1/"
+
+
+def _write_api_log(request: Request, status: int, latency_ms: int, rid: str) -> None:
+    """Gateway API access log, shown to the merchant under "API request logs". Only requests that
+    authenticated as a merchant are stored; anonymous failures go to the application log only."""
+    client = getattr(request.state, "api_client", None)
+    if not client:
+        return
+    try:
+        with get_sessionmaker()() as db:
+            db.add(ApiRequestLog(
+                merchant_id=client["merchant_id"], credential_id=client["credential_id"],
+                environment=client["environment"], method=request.method, path=request.url.path[:255],
+                status_code=status, latency_ms=latency_ms,
+                ip_address=request.client.host if request.client else None,
+                idempotency_key=(request.headers.get("idempotency-key") or "")[:100] or None,
+                request_id=rid, error_code=getattr(request.state, "error_code", None),
+            ))
+            db.commit()
+    except Exception:
+        log.exception("api_request_log_failed")
 
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -33,13 +60,13 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="TechMasters Payment Gateway API",
-        version="0.2.0",
+        version="0.3.0",
         description=(
             "Payment gateway platform owned and operated by TechMasters Innovations Private Limited.\n\n"
             "* `/api/auth` — dashboard authentication (JWT + rotating refresh cookie)\n"
             "* `/api/admin` — Super Admin console\n"
             "* `/api/merchant` — merchant console (registration, profile, bank accounts, providers, keys, webhooks)\n"
-            "* `/api/v1` — merchant-facing gateway API (API key auth; Phase 3)\n\n"
+            "* `/api/v1` — merchant-facing gateway API (HTTP Basic: API key id + secret)\n\n"
             "Amounts are integers in minor units (paise). Timestamps are UTC ISO-8601."
         ),
     )
@@ -68,6 +95,10 @@ def create_app() -> FastAPI:
                 response.headers.setdefault(k, v)
             return response
         finally:
+            if request.url.path.startswith(API_PREFIX):
+                await run_in_threadpool(
+                    _write_api_log, request, status, int((time.perf_counter() - start) * 1000), rid
+                )
             log.info(
                 "request",
                 extra={
@@ -85,6 +116,9 @@ def create_app() -> FastAPI:
     app.include_router(admin_router)
     app.include_router(admin_merchants_router)
     app.include_router(merchant_router)
+    app.include_router(merchant_payments_router)
+    app.include_router(admin_payments_router)
+    app.include_router(v1_router)
 
     @app.get("/health", tags=["Health"])
     def health():

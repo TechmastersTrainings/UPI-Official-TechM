@@ -14,6 +14,10 @@ import OverviewPage from './pages/merchant/OverviewPage';
 import ProfilePage from './pages/merchant/ProfilePage';
 import ProvidersPage from './pages/merchant/ProvidersPage';
 import WebhooksPage from './pages/merchant/WebhooksPage';
+import PaymentsPage from './pages/merchant/PaymentsPage';
+import PaymentDetailPage from './pages/merchant/PaymentDetailPage';
+import AdminPaymentsPage from './pages/admin/PaymentsPage';
+import AdminPaymentDetailPage from './pages/admin/PaymentDetailPage';
 import AuditLogsPage from './pages/admin/AuditLogsPage';
 import DashboardPage from './pages/admin/DashboardPage';
 import UsersPage from './pages/admin/UsersPage';
@@ -42,6 +46,10 @@ export default function App() {
         <Route path="/admin/audit-logs" element={<ProtectedRoute permission="audit:view"><AuditLogsPage /></ProtectedRoute>} />
         <Route path="/admin/merchants" element={<ProtectedRoute permission="merchants:view"><MerchantsPage /></ProtectedRoute>} />
         <Route path="/admin/merchants/:id" element={<ProtectedRoute permission="merchants:view"><MerchantDetailPage /></ProtectedRoute>} />
+        <Route path="/admin/payments" element={<ProtectedRoute permission="payments:view"><AdminPaymentsPage /></ProtectedRoute>} />
+        <Route path="/admin/payments/:id" element={<ProtectedRoute permission="payments:view"><AdminPaymentDetailPage /></ProtectedRoute>} />
+        <Route path="/merchant/payments" element={<ProtectedRoute permission="merchant:payments_view"><PaymentsPage /></ProtectedRoute>} />
+        <Route path="/merchant/payments/:id" element={<ProtectedRoute permission="merchant:payments_view"><PaymentDetailPage /></ProtectedRoute>} />
         <Route path="/merchant/overview" element={<ProtectedRoute permission="merchant:view"><OverviewPage /></ProtectedRoute>} />
         <Route path="/merchant/profile" element={<ProtectedRoute permission="merchant:view"><ProfilePage /></ProtectedRoute>} />
         <Route path="/merchant/bank-accounts" element={<ProtectedRoute permission="merchant:bank_view"><BankAccountsPage /></ProtectedRoute>} />

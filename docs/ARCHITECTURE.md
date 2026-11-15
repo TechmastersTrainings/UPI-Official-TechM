@@ -1,7 +1,7 @@
 # TechMasters Payment Gateway — Architecture
 
 Owner: TechMasters Innovations Private Limited
-Status: Phases 1 (Foundation) and 2 (Merchant management) implemented. Later phases are specified here and built incrementally.
+Status: Phases 1 (Foundation), 2 (Merchant management) and 3 (Payment engine) implemented. Later phases are specified here and built incrementally.
 
 This document is the reference for the eight pre-implementation deliverables:
 directory structure, backend architecture, frontend architecture, database schema,
@@ -95,7 +95,7 @@ process and CLI reuse them unchanged.
 | Process | Command | Role |
 |---|---|---|
 | API | `uvicorn app.main:app --port 8000` | All HTTP endpoints |
-| Worker | `python -m app.workers` (Phase 5) | Status polling, payment expiry, webhook retries, reconciliation imports |
+| Worker | `python -m app.workers` | Payment expiry (Phase 3); status polling, webhook retries, reconciliation imports (Phase 5+) |
 
 **Durable jobs.** The database is the queue of record: `webhook_deliveries.next_attempt_at`,
 pending payments (`status IN (INITIATED, PENDING, PROCESSING)`) and settlement imports are
@@ -201,6 +201,12 @@ CREATED ─▶ INITIATED ─▶ PENDING ─▶ PROCESSING ─▶ SUCCESS ─▶ 
    └─────────────────────────────────────▶ EXPIRED (worker, past expires_at with no success)
 ```
 
+Implemented in `services/payment_state.py`. Besides the allowed next statuses, each target status
+has an allowed set of *sources*: only `PROVIDER_CALLBACK` / `PROVIDER_POLL` can set `SUCCESS`,
+`PENDING`, `PROCESSING`; only `SYSTEM` can set `EXPIRED`; only the merchant or an admin can cancel.
+`PROCESSING` can't expire (money may be moving). Automatic expiry only touches `CREATED` payments;
+once a provider session exists, expiry must first ask the provider (Phase 5).
+
 `SUCCESS`, `FAILED`, `EXPIRED`, `CANCELLED` are terminal for the payment leg. A late
 provider success on an `EXPIRED` payment is never silently applied. It raises
 `INVESTIGATION_REQUIRED` on reconciliation for operator action.
@@ -244,7 +250,9 @@ test, transactions, refunds, request logs.
 ### 5.4 Public gateway API — `/api/v1` (Phase 3 +, Basic auth with API key)
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/v1/payments/create` | `Idempotency-Key` required; returns `payment_id`, `checkout_url`, `expires_at` |
+| POST | `/api/v1/payments/create` | `Idempotency-Key` required; returns the payment (`checkout_url` added in Phase 4) |
+| GET | `/api/v1/payments` | paginated list in the key's environment (Phase 3) |
+| POST | `/api/v1/payments/{payment_id}/cancel` | only from `CREATED`; safe to retry (Phase 3) |
 | POST | `/api/v1/payments/{payment_id}/initiate` | opens provider session; returns QR / intent / redirect |
 | GET | `/api/v1/payments/{payment_id}` | full payment |
 | GET | `/api/v1/payments/{payment_id}/status` | lightweight status |
@@ -321,7 +329,7 @@ class PaymentProvider(Protocol):
 |---|---|---|
 | **1 Foundation** ✅ | Structure, FastAPI, DB + Alembic, auth (JWT/refresh/RBAC/lockout/rate limit), audit log, platform users, Super Admin dashboard on real aggregates, React shell with theme | Tests green; login → dashboard works end-to-end |
 | **2 Merchant management** ✅ | Registration, profile, bank accounts (encrypted), provider configs, API credentials, webhook config, admin approval | Merchant can self-register; admin approves; keys issued once |
-| 3 Payment engine | `/api/v1` payments, idempotency, state machine, expiry, events | Concurrency + idempotency tests pass |
+| **3 Payment engine** ✅ | `/api/v1` payments, idempotency, state machine, expiry, events | Concurrency + idempotency tests pass |
 | 4 UPI & checkout | Provider interface, sandbox adapter, QR/intent, hosted checkout + countdown | Checkout renders only server-verified states |
 | 5 Verification | Status polling worker, callback verification, ledger, outbound webhooks + retries | Duplicate callbacks are no-ops; webhooks signed + retried |
 | 6 Sandbox | Test scenarios, simulate panel, webhook tester, refund simulation | Full sandbox lifecycle E2E test |
