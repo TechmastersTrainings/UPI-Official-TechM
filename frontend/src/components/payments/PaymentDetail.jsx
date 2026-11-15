@@ -124,8 +124,49 @@ export default function PaymentDetail({ payment: p, showMerchant }) {
                     <td className="num">{formatMoney(t.amount)}</td>
                     <td className="mono small">{t.bank_reference || '—'}</td>
                     <td className="mono small">{t.payer_vpa_masked || '—'}</td>
-                    <td>{t.verification_method === 'PROVIDER_WEBHOOK' ? 'Signed callback' : 'Status API'}</td>
+                    <td>
+                      {t.type === 'REFUND' && <StatusBadge status="REFUNDED" label="Refund" />}{' '}
+                      {t.verification_method === 'PROVIDER_WEBHOOK' ? 'Signed callback' : 'Status API'}
+                    </td>
                     <td className="nowrap">{formatDateTime(t.verified_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {p.refunds?.length > 0 && (
+        <section className="card">
+          <div className="card__header"><h2>Refunds</h2></div>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Refund</th>
+                  <th className="num">Amount</th>
+                  <th>Status</th>
+                  <th>Reason</th>
+                  <th>Created</th>
+                  <th>Completed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {p.refunds.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <span className="mono small">{r.id}</span>
+                      {r.provider_refund_ref && <div className="muted small mono">{r.provider_refund_ref}</div>}
+                    </td>
+                    <td className="num">{formatMoney(r.amount)}</td>
+                    <td>
+                      <StatusBadge status={r.status} />
+                      {r.failure_reason && <div className="muted small">{r.failure_reason}</div>}
+                    </td>
+                    <td>{r.reason || '—'}</td>
+                    <td className="nowrap">{formatDateTime(r.created_at)}</td>
+                    <td className="nowrap">{formatDateTime(r.processed_at)}</td>
                   </tr>
                 ))}
               </tbody>

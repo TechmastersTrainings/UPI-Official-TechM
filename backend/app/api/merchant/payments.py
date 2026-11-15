@@ -16,13 +16,17 @@ from app.schemas.payment import (
     PaymentEventOut,
     PaymentListItem,
     PaymentOut,
+    ConsoleRefundCreate,
+    RefundCreate,
+    RefundOut,
     TransactionOut,
     WebhookDeliveryOut,
 )
 from sqlalchemy import select
 
 from app.models import Transaction, WebhookDelivery
-from app.services import audit, checkout, payments
+from app.api.v1.deps import idempotency_key
+from app.services import audit, checkout, payments, refunds
 from app.services.rbac import Perm
 
 router = APIRouter(prefix="/api/merchant/payments", tags=["Merchant console"])
@@ -37,6 +41,7 @@ def detail(db: Session, p, merchant_name: str | None = None) -> PaymentDetail:
         events=[PaymentEventOut.model_validate(e) for e in payments.events(db, p.id)],
         transactions=[TransactionOut.model_validate(t) for t in db.scalars(
             select(Transaction).where(Transaction.payment_id == p.id).order_by(Transaction.verified_at))],
+        refunds=[RefundOut.model_validate(r) for r in refunds.for_payment(db, p.id)],
         webhook_deliveries=[WebhookDeliveryOut.model_validate(d) for d in db.scalars(
             select(WebhookDelivery).where(WebhookDelivery.payment_id == p.id).order_by(WebhookDelivery.created_at))],
     )
@@ -86,4 +91,29 @@ def cancel_payment(
         audit.record(db, "payment.cancelled", actor=ctx.user, actor_type=ActorType.USER, entity_type="payment",
                      entity_id=p.id, merchant_id=p.merchant_id, details={"reason": reason}, meta=request_meta(request))
         db.commit()
+    return detail(db, p)
+
+
+@router.post("/{payment_id}/refunds", response_model=PaymentDetail, status_code=201)
+def refund_payment(
+    payment_id: str,
+    body: ConsoleRefundCreate,
+    request: Request,
+    key: str = Depends(idempotency_key),
+    ctx: MerchantContext = Depends(require_merchant(Perm.M_PAYMENTS_MANAGE, write=True)),
+    db: Session = Depends(get_db),
+):
+    """Refund from the console (same rules as `POST /api/v1/refunds`)."""
+    p = payments.get_scoped(db, ctx.merchant.id, None, payment_id)
+    refund, replayed = refunds.create(
+        db, ctx.merchant, p.environment, RefundCreate(payment_id=p.id, amount=body.amount, reason=body.reason), key,
+        source=EventSource.MERCHANT_API, user_id=ctx.user.id,
+    )
+    if not replayed:
+        audit.record(db, "refund.created", actor=ctx.user, actor_type=ActorType.USER, entity_type="refund",
+                     entity_id=refund.id, merchant_id=p.merchant_id,
+                     details={"payment_id": p.id, "amount": refund.amount, "status": refund.status},
+                     meta=request_meta(request))
+        db.commit()
+    db.refresh(p)
     return detail(db, p)

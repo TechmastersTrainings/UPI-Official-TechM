@@ -75,6 +75,19 @@ export default function CheckoutPage() {
     }
   }
 
+  async function simulate(outcome) {
+    setStarting(true);
+    setError('');
+    try {
+      apply(await checkoutApi.simulate(token, outcome));
+    } catch (err) {
+      setError(errorMessage(err, 'Simulation failed'));
+      load();
+    } finally {
+      setStarting(false);
+    }
+  }
+
   const deadline = view?.session?.expires_at || view?.expires_at;
   const remaining = useCountdown(view && (AWAITING.includes(view.status) || view.status === 'CREATED') ? deadline : null, offsetMs);
 
@@ -150,6 +163,27 @@ export default function CheckoutPage() {
             )}
           </div>
           <p className="muted small center">Keep this page open. Don't pay twice.</p>
+          {isTest && (
+            <div className="checkout__simulate">
+              <div className="checkout__simulate-title">Sandbox: simulate the customer's bank</div>
+              <p className="small muted">
+                Sends a signed provider callback through the real verification pipeline. Your webhooks fire as in live mode.
+              </p>
+              <div className="checkout__simulate-actions">
+                <button type="button" className="btn btn--primary btn--sm" disabled={starting} onClick={() => simulate('SUCCESS')}>
+                  Success
+                </button>
+                <button type="button" className="btn btn--danger-ghost btn--sm" disabled={starting} onClick={() => simulate('FAILED')}>
+                  Failure
+                </button>
+                {view.status !== 'PROCESSING' && (
+                  <button type="button" className="btn btn--secondary btn--sm" disabled={starting} onClick={() => simulate('PROCESSING')}>
+                    Processing
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

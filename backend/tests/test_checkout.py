@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.db.types import utcnow
-from app.models import Merchant, Payment, PaymentAttempt, ProviderConfiguration
+from app.models import Merchant, Payment, PaymentAttempt, ProviderConfiguration, SandboxSimulation
 from app.providers import registry
 from app.providers.base import ProviderError, ProviderState, ProviderStatus
 from app.providers.sandbox import SandboxProvider
@@ -153,6 +153,9 @@ def _overdue(db, payment_id):
     p.expires_at = utcnow() - timedelta(seconds=1)
     for a in db.scalars(select(PaymentAttempt).where(PaymentAttempt.payment_id == payment_id)):
         a.expires_at = p.expires_at
+        sim = db.get(SandboxSimulation, a.provider_session_ref) if a.provider_session_ref else None
+        if sim is not None:  # the simulated provider's own session deadline
+            sim.expires_at = p.expires_at
     db.commit()
 
 

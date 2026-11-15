@@ -65,6 +65,9 @@ class Settings(BaseSettings):
 
     CALLBACK_RATE_LIMIT_PER_MINUTE: int = 600  # per source IP, provider callbacks
 
+    # Sandbox simulator: delay before amount-based test outcomes are decided.
+    SANDBOX_AUTO_OUTCOME_SECONDS: int = 8
+
     # Background worker (python -m app.workers)
     WORKER_INTERVAL_SECONDS: int = 15
 

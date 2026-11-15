@@ -20,3 +20,12 @@ export function formatShortDate(isoDate) {
 }
 
 export const humanize = (s) => (s || '').toLowerCase().replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+
+/** "1,299.50" / "1299.5" → 129950 paise; null when not a positive amount with at most 2 decimals. */
+export function parseRupees(text) {
+  const v = String(text ?? '').replace(/[,\s₹]/g, '');
+  if (!/^\d+(\.\d{1,2})?$/.test(v)) return null;
+  const [r, p = ''] = v.split('.');
+  const paise = Number(r) * 100 + Number(p.padEnd(2, '0'));
+  return paise > 0 && Number.isSafeInteger(paise) ? paise : null;
+}

@@ -12,8 +12,8 @@ from app.db.session import get_db
 from app.db.types import utcnow
 from app.models import Merchant, Payment
 from app.models.enums import EventSource, PaymentStatus
-from app.schemas.payment import CheckoutView, SessionOut
-from app.services import checkout
+from app.schemas.payment import CheckoutView, SessionOut, SimulateRequest
+from app.services import checkout, sandbox_tools
 
 router = APIRouter(prefix="/api/v1/checkout", tags=["Hosted checkout (public)"])
 
@@ -59,3 +59,11 @@ def initiate_checkout(token: str, db: Session = Depends(get_db)):
     attempt = checkout.open_session(db, p, source=EventSource.CHECKOUT)
     db.refresh(p)
     return _view(db, p, attempt)
+
+
+@router.post("/{token}/simulate", response_model=CheckoutView, dependencies=[Depends(_limit)], tags=["Sandbox"])
+def simulate_checkout(token: str, body: SimulateRequest, db: Session = Depends(get_db)):
+    """**Sandbox only.** The Simulate panel on the test checkout page. Refused for live payments."""
+    p = _load(db, token)
+    p = sandbox_tools.simulate(db, p, body.outcome)
+    return _view(db, p)

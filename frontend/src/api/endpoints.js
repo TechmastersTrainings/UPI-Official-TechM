@@ -53,6 +53,8 @@ export const merchantApi = {
   webhookDelivery: (id) => api.get(`/api/merchant/webhook-deliveries/${id}`).then((r) => r.data),
   redeliverWebhook: (id) => api.post(`/api/merchant/webhook-deliveries/${id}/redeliver`).then((r) => r.data),
   sendTestWebhook: (env) => api.post(`/api/merchant/webhook-deliveries/test/${env}`).then((r) => r.data),
+  refundPayment: (id, body, idempotencyKey) =>
+    api.post(`/api/merchant/payments/${id}/refunds`, body, { headers: { 'Idempotency-Key': idempotencyKey } }).then((r) => r.data),
   cancelPayment: (id, reason) => api.post(`/api/merchant/payments/${id}/cancel`, { reason }).then((r) => r.data),
 };
 

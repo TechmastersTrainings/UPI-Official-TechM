@@ -81,6 +81,8 @@ def transition(
     source: str,
     event_type: str | None = None,
     payload: dict | None = None,
+    webhook_event: str | None = None,
+    webhook_data: dict | None = None,
 ) -> PaymentEvent:
     """Move `payment` to `target` and record the event. Does not commit: call `commit_guarded`."""
     current = payment.status
@@ -91,7 +93,7 @@ def transition(
         )
     allowed = ALLOWED_SOURCES[target]
     if (current, target) in _REFUND_REVERT:
-        allowed = allowed | _PROVIDER
+        allowed = allowed | _PROVIDER | {Src.SYSTEM}  # SYSTEM: provider rejected the refund request outright
     if source not in allowed:
         raise InvalidTransition(
             f"{source} is not allowed to set status {target}",
@@ -118,7 +120,10 @@ def transition(
     # Outbox: the merchant notification commits (or rolls back) together with the status change.
     from app.services import webhooks
 
-    webhooks.enqueue_for_status(db, payment, target)
+    if webhook_event:
+        webhooks.enqueue_payment_event(db, payment, webhook_event, extra=webhook_data)
+    else:
+        webhooks.enqueue_for_status(db, payment, target, extra=webhook_data)
     return event
 
 

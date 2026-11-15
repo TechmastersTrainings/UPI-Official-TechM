@@ -75,7 +75,17 @@ Architecture, schema, API spec, provider design, sandbox strategy and the phase 
   then FAILED. SSRF-checked at send time, no redirects. Console delivery log with payload view and redelivery. A test event
   (`POST /api/v1/webhooks/test` or the console button) validates the endpoint for live readiness.
 
-Phases 6–8 (sandbox tools, live, reporting) follow the plan in the architecture doc.
+**Phase 6 (Sandbox & refunds): complete.**
+
+- Stateful sandbox simulator: test outcomes by amount (`x.00` success, `x.01` fail, `x.02` processing, `x.03` expires,
+  other = manual) and a Simulate panel on the test checkout and API. Simulations send signed callbacks through the real
+  verification pipeline. Refused for live payments.
+- Refunds: `POST /api/v1/refunds` (Idempotency-Key, full/partial, one in progress per payment, never above the balance),
+  refund status polling, REFUND ledger rows, `payment.refund_initiated` / `payment.refunded` / `payment.refund_failed`
+  webhooks, and a Refund button on the console payment page.
+- A full sandbox lifecycle test: create → checkout → pay → verify → webhooks → partial and full refund.
+
+Phases 7–8 (live provider, reporting and reconciliation) follow the plan in the architecture doc.
 
 > Live payments are intentionally unreachable today: no live-capable payment provider is integrated yet (Phase 7 needs a
 > signed agreement with an RBI-authorised payment aggregator or acquiring bank), so the readiness checklist cannot complete.
@@ -95,7 +105,7 @@ cp .env.example .env
 .venv/bin/alembic upgrade head
 .venv/bin/python -m app.cli create-superadmin --email you@yourcompany.com --name "Your Name"   # prompts for password
 .venv/bin/uvicorn app.main:app --reload --port 8000
-.venv/bin/python -m app.workers                 # background jobs (expiry, status polling, webhook delivery), in a second terminal
+.venv/bin/python -m app.workers                 # background jobs (expiry, status/refund polling, webhook delivery), in a second terminal
 ```
 
 ### Frontend
@@ -137,6 +147,6 @@ so point it at a **dedicated test database**.
 ## Tests
 
 ```bash
-cd backend && .venv/bin/python -m pytest     # 181 tests: migrations, security, auth, RBAC, dashboard, merchant onboarding, payments, checkout, verification, webhooks
+cd backend && .venv/bin/python -m pytest     # 204 tests: migrations, security, auth, RBAC, dashboard, onboarding, payments, checkout, verification, webhooks, sandbox, refunds
 cd frontend && npm test
 ```

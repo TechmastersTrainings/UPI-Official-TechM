@@ -1169,3 +1169,28 @@
   margin-top: 16px;
   max-width: 420px;
 }
+
+.checkout__simulate {
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px dashed var(--test);
+  border-radius: var(--radius);
+  background: var(--test-soft);
+  text-align: left;
+}
+
+.checkout__simulate-title {
+  font-weight: 700;
+  color: var(--test);
+}
+
+.checkout__simulate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sandbox-guide {
+  margin-top: 12px;
+  text-align: left;
+}

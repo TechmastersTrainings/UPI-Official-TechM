@@ -95,6 +95,33 @@ class CallbackEvent:
     status: ProviderStatus
 
 
+class RefundState(StrEnum):
+    PENDING = "PENDING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+
+
+@dataclass(frozen=True)
+class RefundSnapshot:
+    refund_id: str
+    payment_id: str
+    session_ref: str | None
+    provider_transaction_id: str
+    amount: int
+    currency: str
+    provider_refund_ref: str | None = None
+
+
+@dataclass(frozen=True)
+class RefundResult:
+    state: RefundState
+    provider_refund_ref: str | None = None
+    amount: int | None = None
+    provider_transaction_id: str | None = None  # id of the refund money movement, once it succeeded
+    failure_reason: str | None = None
+    raw: dict | None = None
+
+
 class PaymentProvider(Protocol):
     code: str
     live_capable: bool
@@ -111,4 +138,8 @@ class PaymentProvider(Protocol):
         """MUST verify the provider's signature and raise InvalidSignature if it doesn't match."""
         ...
 
-    # Later phases add: create_refund, fetch_refund_status, fetch_settlements.
+    def create_refund(self, ctx: ProviderContext, refund: RefundSnapshot) -> RefundResult: ...
+
+    def fetch_refund_status(self, ctx: ProviderContext, refund: RefundSnapshot) -> RefundResult: ...
+
+    # Phase 7/8 adds: fetch_settlements.

@@ -6,5 +6,7 @@ const http = axios.create({ baseURL: API_BASE_URL, timeout: 20000, withCredentia
 
 export const checkoutApi = {
   get: (token) => http.get(`/api/v1/checkout/${encodeURIComponent(token)}`).then((r) => r.data),
+  simulate: (token, outcome) =>
+    http.post(`/api/v1/checkout/${encodeURIComponent(token)}/simulate`, { outcome }).then((r) => r.data),
   initiate: (token) => http.post(`/api/v1/checkout/${encodeURIComponent(token)}/initiate`).then((r) => r.data),
 };
