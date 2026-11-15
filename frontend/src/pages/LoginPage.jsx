@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { errorMessage } from '../api/client';
 import Alert from '../components/Alert';
@@ -63,6 +63,9 @@ export default function LoginPage() {
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+        <p className="muted center">
+          New merchant? <Link to="/register">Register your business</Link>
+        </p>
       </div>
       <p className="auth-footer muted">© TechMasters Innovations Private Limited</p>
     </div>

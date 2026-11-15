@@ -28,6 +28,7 @@ from app.models import Role  # noqa: E402
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STRONG_PASSWORD = "Correct-Horse-42!"
+SEEDED_TABLES = {Role.__tablename__, "payment_providers"}  # reference data from migrations
 
 
 def alembic_config() -> Config:
@@ -52,7 +53,9 @@ def _clean_db():
     rate_limit.reset_local()
     with get_engine().begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
-            if table.name != Role.__tablename__:
+            if table.name == "payment_providers":
+                conn.execute(delete(table).where(table.c.id != "prv_sandbox"))
+            elif table.name not in SEEDED_TABLES:
                 conn.execute(delete(table))
 
 
@@ -86,3 +89,29 @@ def login(client, email="admin@example.com", password=STRONG_PASSWORD) -> str:
 
 def auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
+
+
+REGISTRATION = {
+    "business": {
+        "business_name": "Sharma Electronics",
+        "legal_business_name": "Sharma Electronics Private Limited",
+        "business_email": "accounts@sharma.example.com",
+        "mobile": "+91 98765 43210",
+        "business_type": "PRIVATE_LIMITED",
+        "website_url": "https://sharma.example.com",
+    },
+    "address": {"address_line1": "12 MG Road", "city": "Bengaluru", "state": "Karnataka", "postal_code": "560001"},
+    "contact": {"contact_person_name": "Ravi Sharma", "contact_person_mobile": "9876543210", "pan": "abcde1234f"},
+    "owner": {"full_name": "Ravi Sharma", "email": "ravi@sharma.example.com", "password": STRONG_PASSWORD},
+}
+
+
+def register_merchant(client, **overrides) -> dict:
+    import copy
+
+    body = copy.deepcopy(REGISTRATION)
+    for section, values in overrides.items():
+        body[section].update(values)
+    r = client.post("/api/merchant/register", json=body)
+    assert r.status_code == 201, r.text
+    return r.json()

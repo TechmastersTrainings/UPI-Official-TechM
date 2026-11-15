@@ -23,7 +23,24 @@ Architecture, schema, API spec, provider design, sandbox strategy and the phase 
 - Super Admin dashboard on real aggregates (Live and Sandbox kept separate), daily trend chart, status summary, recent activity.
 - Platform user management, audit log viewer, change password, light/dark theme, responsive layout.
 
-Phases 2–8 (merchants, payment engine, UPI/checkout, verification, sandbox, live, reporting) follow the plan in the architecture doc.
+**Phase 2 (Merchant management): complete.**
+
+- Self-service merchant registration (business, address, contact/PAN/GSTIN, owner login) → `PENDING_REVIEW`.
+- Business profile editing; Indian identifier validation (mobile, IFSC, PAN, GSTIN, PIN, UPI ID).
+- Bank accounts: encrypted account numbers, masked display, duplicate detection, default per environment,
+  activate/deactivate, audited reveal, TechMasters verification (re-verification on any identity change).
+- Provider onboarding: DRAFT → SUBMITTED → APPROVED → TESTED → ACTIVE, credentials encrypted and never returned.
+  A TEST-only sandbox configuration is created for every merchant; live configs require a live-capable provider.
+- API credentials: `tm_test_` / `tm_live_` key IDs, secrets shown once and stored as HMAC, regenerate/revoke,
+  merchant-level API on/off, request log viewer. Live keys only after live mode is enabled.
+- Webhook endpoints per environment with platform-generated signing secrets (shown once, rotatable) and SSRF-safe URL rules.
+- Super Admin merchant console: search/filter, approve/reject/suspend/reactivate, bank verification, provider approval,
+  and live mode gated by a 7-item readiness checklist.
+
+Phases 3–8 (payment engine, UPI/checkout, verification, sandbox, live, reporting) follow the plan in the architecture doc.
+
+> Live payments are intentionally unreachable today: no live-capable payment provider is integrated yet (Phase 7 needs a
+> signed agreement with an RBI-authorised payment aggregator or acquiring bank), so the readiness checklist cannot complete.
 
 ## Local setup
 
@@ -81,6 +98,6 @@ so point it at a **dedicated test database**.
 ## Tests
 
 ```bash
-cd backend && .venv/bin/python -m pytest     # 37 tests: schema/migration parity, security, auth flows, RBAC, dashboard aggregates
+cd backend && .venv/bin/python -m pytest     # 73 tests: migrations, security, auth, RBAC, dashboard, merchant onboarding
 cd frontend && npm test
 ```

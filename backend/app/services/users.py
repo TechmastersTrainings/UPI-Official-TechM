@@ -27,6 +27,7 @@ def create_user(
     merchant_id: str | None = None,
     actor: User | None = None,
     meta: RequestMeta | None = None,
+    source: str = "cli",
 ) -> User:
     email = email.strip().lower()
     problems = validate_password_strength(password)
@@ -47,7 +48,7 @@ def create_user(
     db.flush()
     audit.record(
         db, "user.created", actor=actor, actor_type=ActorType.USER if actor else ActorType.SYSTEM,
-        actor_label=None if actor else "cli", entity_type="user",
+        actor_label=None if actor else source, entity_type="user",
         entity_id=user.id, merchant_id=merchant_id, details={"email": email, "role": role}, meta=meta,
     )
     return user

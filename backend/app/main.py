@@ -7,8 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from app.api.admin.merchants import router as admin_merchants_router
 from app.api.admin.routes import router as admin_router
 from app.api.auth.routes import router as auth_router
+from app.api.merchant.routes import router as merchant_router
 from app.core.config import get_settings
 from app.core.errors import install_exception_handlers
 from app.core.logging import configure_logging, request_id_ctx
@@ -31,11 +33,12 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="TechMasters Payment Gateway API",
-        version="0.1.0",
+        version="0.2.0",
         description=(
             "Payment gateway platform owned and operated by TechMasters Innovations Private Limited.\n\n"
             "* `/api/auth` — dashboard authentication (JWT + rotating refresh cookie)\n"
             "* `/api/admin` — Super Admin console\n"
+            "* `/api/merchant` — merchant console (registration, profile, bank accounts, providers, keys, webhooks)\n"
             "* `/api/v1` — merchant-facing gateway API (API key auth; Phase 3)\n\n"
             "Amounts are integers in minor units (paise). Timestamps are UTC ISO-8601."
         ),
@@ -80,6 +83,8 @@ def create_app() -> FastAPI:
     install_exception_handlers(app)
     app.include_router(auth_router)
     app.include_router(admin_router)
+    app.include_router(admin_merchants_router)
+    app.include_router(merchant_router)
 
     @app.get("/health", tags=["Health"])
     def health():
