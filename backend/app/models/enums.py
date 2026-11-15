@@ -1,0 +1,145 @@
+from enum import StrEnum
+
+
+class Environment(StrEnum):
+    TEST = "TEST"
+    LIVE = "LIVE"
+
+
+class RoleName(StrEnum):
+    SUPER_ADMIN = "SUPER_ADMIN"
+    PLATFORM_ADMIN = "PLATFORM_ADMIN"
+    PLATFORM_SUPPORT = "PLATFORM_SUPPORT"
+    MERCHANT_ADMIN = "MERCHANT_ADMIN"
+    MERCHANT_DEVELOPER = "MERCHANT_DEVELOPER"
+    MERCHANT_VIEWER = "MERCHANT_VIEWER"
+
+
+PLATFORM_ROLES = {RoleName.SUPER_ADMIN, RoleName.PLATFORM_ADMIN, RoleName.PLATFORM_SUPPORT}
+MERCHANT_ROLES = {RoleName.MERCHANT_ADMIN, RoleName.MERCHANT_DEVELOPER, RoleName.MERCHANT_VIEWER}
+
+
+class MerchantStatus(StrEnum):
+    PENDING_REVIEW = "PENDING_REVIEW"
+    ACTIVE = "ACTIVE"
+    SUSPENDED = "SUSPENDED"
+    REJECTED = "REJECTED"
+
+
+class VerificationStatus(StrEnum):
+    UNVERIFIED = "UNVERIFIED"
+    PENDING = "PENDING"
+    VERIFIED = "VERIFIED"
+    REJECTED = "REJECTED"
+
+
+class ProviderConfigStatus(StrEnum):
+    DRAFT = "DRAFT"
+    SUBMITTED = "SUBMITTED"
+    APPROVED = "APPROVED"
+    TESTED = "TESTED"
+    ACTIVE = "ACTIVE"
+    DISABLED = "DISABLED"
+
+
+class CredentialStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    REVOKED = "REVOKED"
+
+
+class PaymentStatus(StrEnum):
+    CREATED = "CREATED"
+    INITIATED = "INITIATED"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+    REFUND_PENDING = "REFUND_PENDING"
+    PARTIALLY_REFUNDED = "PARTIALLY_REFUNDED"
+    REFUNDED = "REFUNDED"
+
+
+# Statuses that represent verified collected money (before/after refunds).
+COLLECTED_STATUSES = {
+    PaymentStatus.SUCCESS,
+    PaymentStatus.REFUND_PENDING,
+    PaymentStatus.PARTIALLY_REFUNDED,
+    PaymentStatus.REFUNDED,
+}
+IN_FLIGHT_STATUSES = {
+    PaymentStatus.CREATED,
+    PaymentStatus.INITIATED,
+    PaymentStatus.PENDING,
+    PaymentStatus.PROCESSING,
+}
+
+
+class PaymentMethod(StrEnum):
+    UPI_QR = "UPI_QR"
+    UPI_INTENT = "UPI_INTENT"
+    HOSTED = "HOSTED"
+
+
+class AttemptStatus(StrEnum):
+    CREATED = "CREATED"
+    AWAITING_CUSTOMER = "AWAITING_CUSTOMER"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    EXPIRED = "EXPIRED"
+
+
+class TransactionType(StrEnum):
+    PAYMENT = "PAYMENT"
+    REFUND = "REFUND"
+
+
+class VerificationMethod(StrEnum):
+    PROVIDER_API = "PROVIDER_API"
+    PROVIDER_WEBHOOK = "PROVIDER_WEBHOOK"
+
+
+class EventSource(StrEnum):
+    MERCHANT_API = "MERCHANT_API"
+    CHECKOUT = "CHECKOUT"
+    PROVIDER_CALLBACK = "PROVIDER_CALLBACK"
+    PROVIDER_POLL = "PROVIDER_POLL"
+    SYSTEM = "SYSTEM"
+    ADMIN = "ADMIN"
+
+
+class RefundStatus(StrEnum):
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+
+
+class WebhookDeliveryStatus(StrEnum):
+    PENDING = "PENDING"
+    DELIVERED = "DELIVERED"
+    RETRYING = "RETRYING"
+    FAILED = "FAILED"
+
+
+class SettlementStatus(StrEnum):
+    PENDING = "PENDING"
+    PROCESSED = "PROCESSED"
+    CREDITED = "CREDITED"
+    FAILED = "FAILED"
+
+
+class ReconciliationStatus(StrEnum):
+    NOT_RECONCILED = "NOT_RECONCILED"
+    MATCHED = "MATCHED"
+    SETTLEMENT_PENDING = "SETTLEMENT_PENDING"
+    SETTLED = "SETTLED"
+    MISMATCH = "MISMATCH"
+    INVESTIGATION_REQUIRED = "INVESTIGATION_REQUIRED"
+
+
+class ActorType(StrEnum):
+    USER = "USER"
+    API_KEY = "API_KEY"
+    SYSTEM = "SYSTEM"
