@@ -9,7 +9,19 @@ from app.db.session import get_db
 from app.models.enums import ActorType, EventSource, PaymentStatus
 from app.schemas.admin import Page
 from app.schemas.merchant import Env
-from app.schemas.payment import AttemptOut, PaymentCancel, PaymentDetail, PaymentEventOut, PaymentListItem, PaymentOut
+from app.schemas.payment import (
+    AttemptOut,
+    PaymentCancel,
+    PaymentDetail,
+    PaymentEventOut,
+    PaymentListItem,
+    PaymentOut,
+    TransactionOut,
+    WebhookDeliveryOut,
+)
+from sqlalchemy import select
+
+from app.models import Transaction, WebhookDelivery
 from app.services import audit, checkout, payments
 from app.services.rbac import Perm
 
@@ -23,6 +35,10 @@ def detail(db: Session, p, merchant_name: str | None = None) -> PaymentDetail:
         **base, merchant_id=p.merchant_id, merchant_name=merchant_name, provider_code=p.provider_code,
         attempts=[AttemptOut.model_validate(a) for a in checkout.attempts(db, p.id)],
         events=[PaymentEventOut.model_validate(e) for e in payments.events(db, p.id)],
+        transactions=[TransactionOut.model_validate(t) for t in db.scalars(
+            select(Transaction).where(Transaction.payment_id == p.id).order_by(Transaction.verified_at))],
+        webhook_deliveries=[WebhookDeliveryOut.model_validate(d) for d in db.scalars(
+            select(WebhookDelivery).where(WebhookDelivery.payment_id == p.id).order_by(WebhookDelivery.created_at))],
     )
 
 

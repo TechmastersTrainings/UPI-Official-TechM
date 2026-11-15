@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.responses import JSONResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.v1.deps import ApiClient, get_api_client, idempotency_key
@@ -16,8 +18,12 @@ from app.schemas.payment import (
     PaymentSession,
     PaymentStatusOut,
     SessionOut,
+    TransactionOut,
+    WebhookDeliveryOut,
 )
-from app.services import checkout, payments
+from app.core import rate_limit
+from app.models import Transaction
+from app.services import callbacks, checkout, payments, verification, webhooks
 
 router = APIRouter(prefix="/api/v1", tags=["Gateway API"])
 
@@ -105,3 +111,64 @@ def initiate_payment(payment_id: str, client: ApiClient = Depends(get_api_client
     attempt = checkout.open_session(db, p, source=EventSource.MERCHANT_API)
     db.refresh(p)
     return PaymentSession(payment=PaymentOut.of(p), session=SessionOut.of(attempt))
+
+
+@router.post("/payments/{payment_id}/verify", response_model=PaymentOut)
+def verify_payment(payment_id: str, client: ApiClient = Depends(get_api_client), db: Session = Depends(get_db)):
+    """Ask the payment provider for the current status now (server-to-server) and apply it. Use this
+    when your customer returns from checkout, before fulfilling the order."""
+    p = payments.get_scoped(db, client.merchant.id, client.environment, payment_id)
+    return PaymentOut.of(verification.verify_now(db, p))
+
+
+@router.get("/transactions", response_model=Page[TransactionOut])
+def list_transactions(
+    payment_id: str | None = Query(None, max_length=32),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+    client: ApiClient = Depends(get_api_client),
+    db: Session = Depends(get_db),
+):
+    """Ledger of provider-verified money movements in the key's environment, newest first."""
+    conds = [Transaction.merchant_id == client.merchant.id, Transaction.environment == client.environment]
+    if payment_id:
+        conds.append(Transaction.payment_id == payment_id)
+    total = db.scalar(select(func.count()).select_from(Transaction).where(*conds)) or 0
+    rows = db.scalars(select(Transaction).where(*conds).order_by(Transaction.verified_at.desc(), Transaction.id)
+                      .offset((page - 1) * page_size).limit(page_size)).all()
+    return Page(items=[TransactionOut.model_validate(t) for t in rows], total=total, page=page, page_size=page_size)
+
+
+@router.post("/webhooks/test", response_model=WebhookDeliveryOut)
+def send_test_webhook(client: ApiClient = Depends(get_api_client), db: Session = Depends(get_db)):
+    """Send a signed `webhook.test` event to your registered endpoint now and return the result.
+    A 2xx response marks the endpoint as validated (required for live mode)."""
+    return WebhookDeliveryOut.model_validate(webhooks.send_test(db, client.merchant.id, client.environment))
+
+
+callback_router = APIRouter(prefix="/api/v1/providers", tags=["Provider callbacks"])
+MAX_CALLBACK_BODY = 65_536
+
+
+@callback_router.post("/{provider_code}/callback", include_in_schema=True)
+async def provider_callback(provider_code: str, request: Request):
+    """Provider → gateway notification. Authenticated by the provider's signature, not by an API key.
+    Stored before processing; repeats of a processed event are acknowledged without effect."""
+    from starlette.concurrency import run_in_threadpool
+
+    from app.core.config import get_settings
+    from app.db.session import get_sessionmaker
+
+    ip = request.client.host if request.client else "unknown"
+    rate_limit.hit(f"callback:{ip}", get_settings().CALLBACK_RATE_LIMIT_PER_MINUTE)
+    body = await request.body()
+    if len(body) > MAX_CALLBACK_BODY:
+        return JSONResponse(status_code=413, content={"status": "rejected", "reason": "body too large"})
+    headers = {k.lower(): v for k, v in request.headers.items()}
+
+    def _run():
+        with get_sessionmaker()() as db:
+            return callbacks.receive(db, provider_code[:32], headers, body)
+
+    outcome = await run_in_threadpool(_run)
+    return JSONResponse(status_code=outcome.http_status, content={"status": outcome.result})

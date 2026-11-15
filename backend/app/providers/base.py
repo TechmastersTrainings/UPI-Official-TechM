@@ -69,7 +69,30 @@ class ProviderStatus:
     provider_transaction_id: str | None = None
     bank_reference: str | None = None
     failure_reason: str | None = None
+    payer_vpa: str | None = field(default=None, repr=False)  # stored masked only
     raw: dict | None = None
+
+
+class InvalidSignature(Exception):
+    """A callback failed signature verification. It is stored and never processed."""
+
+
+@dataclass(frozen=True)
+class CallbackRef:
+    """Unverified routing data read from a callback, used only to find which payment (and so which
+    merchant's provider configuration) to verify it against."""
+
+    event_id: str
+    session_ref: str
+
+
+@dataclass(frozen=True)
+class CallbackEvent:
+    """A callback whose signature has been verified."""
+
+    event_id: str
+    session_ref: str
+    status: ProviderStatus
 
 
 class PaymentProvider(Protocol):
@@ -81,5 +104,11 @@ class PaymentProvider(Protocol):
     def fetch_status(self, ctx: ProviderContext, payment: PaymentSnapshot, session_ref: str,
                      session_expires_at: datetime) -> ProviderStatus: ...
 
-    # Phase 5 adds: parse_callback (must verify the signature), create_refund, fetch_refund_status,
-    # fetch_settlements.
+    @classmethod
+    def identify_callback(cls, headers: dict[str, str], body: bytes) -> CallbackRef: ...
+
+    def verify_callback(self, ctx: ProviderContext, headers: dict[str, str], body: bytes) -> CallbackEvent:
+        """MUST verify the provider's signature and raise InvalidSignature if it doesn't match."""
+        ...
+
+    # Later phases add: create_refund, fetch_refund_status, fetch_settlements.

@@ -20,6 +20,10 @@ class ProviderUnavailable(AppError):
     code = "PROVIDER_UNAVAILABLE"
 
 
+def adapter_class(code: str) -> type | None:
+    return _ADAPTERS.get(code)
+
+
 def get_adapter(code: str, environment: str, *, db_live_capable: bool) -> PaymentProvider:
     cls = _ADAPTERS.get(code)
     if cls is None:

@@ -39,7 +39,7 @@ from app.models.enums import (
     VerificationStatus,
 )
 from app.schemas.payment import PaymentCreate
-from app.services import payment_state
+from app.services import payment_state, webhooks
 
 log = logging.getLogger(__name__)
 
@@ -200,6 +200,7 @@ def create(db: Session, cred: ApiCredential, merchant: Merchant, body: PaymentCr
         db.flush()
         payment_state.record_event(db, payment, "payment.created", source=EventSource.MERCHANT_API,
                                    payload={"key_id": cred.key_id, "amount": payment.amount})
+        webhooks.enqueue_payment_event(db, payment, "payment.created")
         db.commit()
     except IntegrityError:
         # Lost a race with a concurrent request: same Idempotency-Key or same merchant_reference.

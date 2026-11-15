@@ -161,6 +161,8 @@ class PaymentDetail(PaymentOut):
     provider_code: str | None
     attempts: list[AttemptOut]
     events: list[PaymentEventOut]
+    transactions: list["TransactionOut"] = []
+    webhook_deliveries: list["WebhookDeliveryOut"] = []
 
 
 class SessionOut(BaseModel):
@@ -227,3 +229,47 @@ class AdminPaymentListItem(PaymentListItem):
 class PaymentCancel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reason: Annotated[str, StringConstraints(strip_whitespace=True, max_length=255)] | None = None
+
+
+class TransactionOut(BaseModel):
+    """A verified money movement (ledger row). Provider-confirmed; bank credit is tracked separately."""
+
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    payment_id: str
+    environment: str
+    type: str
+    amount: int
+    currency: str
+    provider_code: str
+    provider_transaction_id: str
+    bank_reference: str | None
+    payer_vpa_masked: str | None
+    verification_method: str
+    verified_at: datetime
+
+
+class WebhookDeliveryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    event_id: str
+    event_type: str
+    environment: str
+    payment_id: str | None
+    url: str
+    status: str
+    attempt_count: int
+    next_attempt_at: datetime | None
+    last_attempt_at: datetime | None
+    last_response_code: int | None
+    last_response_body: str | None
+    last_error: str | None
+    delivered_at: datetime | None
+    created_at: datetime
+
+
+class WebhookDeliveryDetail(WebhookDeliveryOut):
+    payload: dict
+
+
+PaymentDetail.model_rebuild()

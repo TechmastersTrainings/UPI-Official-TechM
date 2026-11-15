@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { merchantApi } from '../../api/endpoints';
 import Alert from '../../components/Alert';
+import EmptyState from '../../components/EmptyState';
+import Modal from '../../components/Modal';
+import Pagination from '../../components/Pagination';
 import { Field } from '../../components/forms';
 import SecretOnce from '../../components/SecretOnce';
 import Spinner from '../../components/Spinner';
@@ -29,6 +33,14 @@ function WebhookCard({ env, config, onSaved }) {
       if (res.signing_secret) setSecret(res.signing_secret);
       onSaved();
     }
+  }
+
+  async function sendTest() {
+    const res = await action.run('test', () => merchantApi.sendTestWebhook(env));
+    if (!res) return;
+    if (res.status === 'DELIVERED') action.setNotice(`Test event delivered (HTTP ${res.last_response_code}). Endpoint validated.`);
+    else action.setError(`Test event not acknowledged: ${res.last_error || 'no 2xx response'}`);
+    onSaved();
   }
 
   async function rotate() {
@@ -94,9 +106,14 @@ function WebhookCard({ env, config, onSaved }) {
             {config ? 'Save changes' : 'Create webhook'}
           </button>
           {config && (
-            <button type="button" className="btn btn--secondary" disabled={action.busy === 'rotate'} onClick={rotate}>
-              Rotate signing secret
-            </button>
+            <>
+              <button type="button" className="btn btn--secondary" disabled={!!action.busy} onClick={sendTest}>
+                {action.busy === 'test' ? 'Sending…' : 'Send test event'}
+              </button>
+              <button type="button" className="btn btn--secondary" disabled={action.busy === 'rotate'} onClick={rotate}>
+                Rotate signing secret
+              </button>
+            </>
           )}
         </div>
       </form>
@@ -123,6 +140,110 @@ export default function WebhooksPage() {
       </div>
       <WebhookCard env="TEST" config={byEnv.TEST} onSaved={reload} />
       <WebhookCard env="LIVE" config={byEnv.LIVE} onSaved={reload} />
+      <DeliveryLog />
     </div>
+  );
+}
+
+const PAGE_SIZE = 20;
+
+function DeliveryLog() {
+  const [env, setEnv] = useState('TEST');
+  const [page, setPage] = useState(1);
+  const [open, setOpen] = useState(null);
+  const action = useAction();
+  const { data, error, loading, reload } = useLoad(
+    () => merchantApi.webhookDeliveries({ environment: env, page, page_size: PAGE_SIZE }),
+    [env, page],
+  );
+
+  async function redeliver(d) {
+    const res = await action.run(d.id, () => merchantApi.redeliverWebhook(d.id));
+    if (res) {
+      if (res.status === 'DELIVERED') action.setNotice(`Event ${res.event_id} delivered.`);
+      else action.setError(`Redelivery failed: ${res.last_error || 'no 2xx response'}`);
+      reload();
+    }
+  }
+
+  async function view(d) {
+    const res = await action.run('view', () => merchantApi.webhookDelivery(d.id));
+    if (res) setOpen(res);
+  }
+
+  return (
+    <section className="card">
+      <div className="card__header">
+        <h2>Delivery log</h2>
+        <div className="card__tools">
+          <div className="segmented" role="group" aria-label="Environment">
+            {['TEST', 'LIVE'].map((e) => (
+              <button key={e} type="button" className={env === e ? 'is-active' : ''} onClick={() => { setEnv(e); setPage(1); }}>
+                {e === 'LIVE' ? 'Live' : 'Sandbox'}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={reload} disabled={loading}>Refresh</button>
+        </div>
+      </div>
+      <Alert onRetry={reload}>{error}</Alert>
+      <Alert>{action.error}</Alert>
+      <Alert kind="success">{action.notice}</Alert>
+      {loading && !data ? (
+        <Spinner />
+      ) : data?.items.length ? (
+        <>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Status</th>
+                  <th>Attempts</th>
+                  <th>Last response</th>
+                  <th>Created</th>
+                  <th aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {data.items.map((d) => (
+                  <tr key={d.id}>
+                    <td>
+                      <span className="mono">{d.event_type}</span>
+                      <div className="muted small mono">{d.event_id}</div>
+                      {d.payment_id && <Link className="small" to={`/merchant/payments/${d.payment_id}`}>{d.payment_id}</Link>}
+                    </td>
+                    <td>
+                      <StatusBadge status={d.status} />
+                      {d.status === 'RETRYING' && <div className="muted small">Next {formatDateTime(d.next_attempt_at)}</div>}
+                    </td>
+                    <td className="num">{d.attempt_count}</td>
+                    <td className="small">
+                      {d.last_response_code ? `HTTP ${d.last_response_code}` : '—'}
+                      {d.last_error && <div className="muted">{d.last_error}</div>}
+                    </td>
+                    <td className="nowrap">{formatDateTime(d.created_at)}</td>
+                    <td className="row-actions">
+                      <button type="button" className="btn btn--ghost btn--sm" onClick={() => view(d)}>Payload</button>
+                      {d.event_type !== 'webhook.test' && (
+                        <button type="button" className="btn btn--secondary btn--sm" disabled={!!action.busy} onClick={() => redeliver(d)}>
+                          {action.busy === d.id ? 'Sending…' : 'Redeliver'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onChange={setPage} />
+        </>
+      ) : (
+        <EmptyState title="No deliveries yet" message="Events appear here once payments change status and a webhook is configured." />
+      )}
+      <Modal open={!!open} title={open ? open.event_type : ''} onClose={() => setOpen(null)}>
+        {open && <pre className="code">{JSON.stringify(open.payload, null, 2)}</pre>}
+      </Modal>
+    </section>
   );
 }

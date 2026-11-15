@@ -1,7 +1,7 @@
 # TechMasters Payment Gateway — Architecture
 
 Owner: TechMasters Innovations Private Limited
-Status: Phases 1 (Foundation), 2 (Merchant management), 3 (Payment engine) and 4 (UPI & checkout) implemented. Later phases are specified here and built incrementally.
+Status: Phases 1 (Foundation), 2 (Merchant management), 3 (Payment engine), 4 (UPI & checkout) and 5 (Verification) implemented. Later phases are specified here and built incrementally.
 
 This document is the reference for the eight pre-implementation deliverables:
 directory structure, backend architecture, frontend architecture, database schema,
@@ -95,7 +95,7 @@ process and CLI reuse them unchanged.
 | Process | Command | Role |
 |---|---|---|
 | API | `uvicorn app.main:app --port 8000` | All HTTP endpoints |
-| Worker | `python -m app.workers` | Payment expiry (Phase 3), provider-confirmed expiry of open sessions (Phase 4); status polling, webhook retries, reconciliation imports (Phase 5+) |
+| Worker | `python -m app.workers` | Payment expiry, provider status polling with backoff, provider-confirmed session expiry, outbound webhook delivery + retries; reconciliation imports (Phase 8) |
 
 **Durable jobs.** The database is the queue of record: `webhook_deliveries.next_attempt_at`,
 pending payments (`status IN (INITIATED, PENDING, PROCESSING)`) and settlement imports are
@@ -269,8 +269,24 @@ Create-payment body: `merchant_reference`, `order_reference`, `amount` (integer 
 `HOSTED`), `return_url`, `webhook_url` (must match a registered host), `expires_in_seconds`
 (60–86400), `notes`.
 
+### 5.4.1 Verification engine (Phase 5)
+
+`services/verification.py` is the only code that turns provider information into payment changes.
+Inputs: authenticated status calls (`PROVIDER_POLL`) and signature-verified callbacks
+(`PROVIDER_CALLBACK`, stored in `provider_callbacks` before processing, unique per provider event).
+Before `SUCCESS`, amount, currency and the provider transaction id are cross-checked against the
+payment; a mismatch is recorded (`payment.verification_failed`) and not applied. A success writes one
+ledger row (`transactions`, unique per provider transaction id) and a `NOT_RECONCILED`
+reconciliation record. Money reported for an expired/cancelled/failed payment, or a second
+transaction for a paid one, is recorded in the ledger and flagged `INVESTIGATION_REQUIRED`.
+Polling: 5s, 10s, 15s, 30s, 1m, 2m, then every 5 minutes until the session is final.
+
 ### 5.5 Outbound webhooks (Phase 5)
-Headers: `X-TM-Event-Id`, `X-TM-Timestamp`, `X-TM-Signature: v1=<hex HMAC-SHA256(secret,
+Implemented as an outbox (`webhook_deliveries` rows written in the same transaction as the status
+change). Events: `payment.created|initiated|pending|success|failed|expired|cancelled` (refund events
+in Phase 8). Delivery re-checks DNS at send time (public IPs only, except TEST in development),
+never follows redirects, and a 2xx reply to `webhook.test` validates the endpoint.
+Headers: `X-TM-Event-Id`, `X-TM-Event-Type`, `X-TM-Timestamp`, `X-TM-Signature: v1=<hex HMAC-SHA256(secret,
 "{timestamp}.{raw_body}")>`. Receivers must reject timestamps older than 5 minutes. Retries
 use exponential backoff (1m, 5m, 15m, 1h, 6h, 24h), up to 8 attempts, then `FAILED`. A manual
 redeliver is available from the dashboard.
@@ -279,11 +295,11 @@ redeliver is available from the dashboard.
 
 ## 6. Payment provider integration architecture (Phase 4)
 
-Implemented in `app/providers/` (`base.py` contract, `registry.py`, `sandbox.py`). Phase 4 uses
-`create_session` (opening a UPI QR / intent session, idempotently, under a row lock plus optimistic
-locking) and `fetch_status` for expiry only: a payment with an open session expires only when the
-provider reports the session closed with nothing collected. Every other provider answer, including
-success, is left for the Phase 5 verification engine.
+Implemented in `app/providers/` (`base.py` contract, `registry.py`, `sandbox.py`): `create_session`,
+`fetch_status`, and callbacks split into `identify_callback` (unverified routing fields, used only to
+find the merchant's configuration) and `verify_callback` (must check the signature). A payment with
+an open session expires only when the provider reports the session closed with nothing collected.
+The sandbox signs its callbacks with HMAC-SHA256 under a server-only key derived from `HASH_PEPPER`.
 
 ```python
 class PaymentProvider(Protocol):
@@ -338,7 +354,7 @@ class PaymentProvider(Protocol):
 | **2 Merchant management** ✅ | Registration, profile, bank accounts (encrypted), provider configs, API credentials, webhook config, admin approval | Merchant can self-register; admin approves; keys issued once |
 | **3 Payment engine** ✅ | `/api/v1` payments, idempotency, state machine, expiry, events | Concurrency + idempotency tests pass |
 | **4 UPI & checkout** ✅ | Provider interface, sandbox adapter, QR/intent, hosted checkout + countdown | Checkout renders only server-verified states |
-| 5 Verification | Status polling worker, callback verification, ledger, outbound webhooks + retries | Duplicate callbacks are no-ops; webhooks signed + retried |
+| **5 Verification** ✅ | Status polling worker, callback verification, ledger, outbound webhooks + retries | Duplicate callbacks are no-ops; webhooks signed + retried |
 | 6 Sandbox | Test scenarios, simulate panel, webhook tester, refund simulation | Full sandbox lifecycle E2E test |
 | 7 Live | First real provider adapter (needs signed provider agreement + docs), live gating, settlement import | Provider contract tests vs provider sandbox |
 | 8 Reporting & admin | Transaction reports/CSV, refunds UI, settlements, reconciliation, audit viewer filters | Reconciliation exception flow tested |

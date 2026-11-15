@@ -99,6 +99,71 @@ export default function PaymentDetail({ payment: p, showMerchant }) {
         </section>
       )}
 
+      {p.transactions?.length > 0 && (
+        <section className="card">
+          <div className="card__header"><h2>Verified transactions</h2></div>
+          <p className="muted small">
+            Confirmed by the payment provider. Bank credit to the settlement account is confirmed separately during reconciliation.
+          </p>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Provider transaction</th>
+                  <th className="num">Amount</th>
+                  <th>Bank ref. (RRN)</th>
+                  <th>Payer</th>
+                  <th>Verified via</th>
+                  <th>Verified</th>
+                </tr>
+              </thead>
+              <tbody>
+                {p.transactions.map((t) => (
+                  <tr key={t.id}>
+                    <td className="mono small">{t.provider_transaction_id}</td>
+                    <td className="num">{formatMoney(t.amount)}</td>
+                    <td className="mono small">{t.bank_reference || '—'}</td>
+                    <td className="mono small">{t.payer_vpa_masked || '—'}</td>
+                    <td>{t.verification_method === 'PROVIDER_WEBHOOK' ? 'Signed callback' : 'Status API'}</td>
+                    <td className="nowrap">{formatDateTime(t.verified_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {p.webhook_deliveries?.length > 0 && (
+        <section className="card">
+          <div className="card__header"><h2>Webhook deliveries</h2></div>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Status</th>
+                  <th>Attempts</th>
+                  <th>Last response</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {p.webhook_deliveries.map((d) => (
+                  <tr key={d.id}>
+                    <td className="mono small">{d.event_type}</td>
+                    <td><StatusBadge status={d.status} /></td>
+                    <td className="num">{d.attempt_count}</td>
+                    <td className="small">{d.last_response_code ? `HTTP ${d.last_response_code}` : d.last_error || '—'}</td>
+                    <td className="nowrap">{formatDateTime(d.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       <section className="card">
         <div className="card__header"><h2>Timeline</h2></div>
         <ul className="activity">

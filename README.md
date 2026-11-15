@@ -62,7 +62,20 @@ Architecture, schema, API spec, provider design, sandbox strategy and the phase 
 - Payments with an open session expire only once the provider confirms nothing was collected.
 - The console payment detail shows provider sessions and the checkout link.
 
-Phases 5–8 (verification, sandbox tools, live, reporting) follow the plan in the architecture doc.
+**Phase 5 (Verification): complete.**
+
+- Verification engine: the only path to `SUCCESS`. Provider amount, currency and transaction id are cross-checked
+  before success. Mismatches are recorded and not applied.
+- Provider callbacks at `POST /api/v1/providers/{code}/callback`: stored before processing, signature-verified
+  against the merchant's provider configuration, and de-duplicated per provider event. Forged callbacks are stored and ignored.
+- Status polling worker with backoff, `POST /api/v1/payments/{id}/verify`, and provider-confirmed expiry.
+- Ledger (`transactions`, one row per provider transaction) and `GET /api/v1/transactions`. Late or second payments are
+  recorded and flagged `INVESTIGATION_REQUIRED`, never silently applied.
+- Outbound webhooks via an outbox. Signed `X-TM-Signature: v1=HMAC(secret, "ts.body")`; retries at 1m/5m/15m/1h/6h/24h/24h,
+  then FAILED. SSRF-checked at send time, no redirects. Console delivery log with payload view and redelivery. A test event
+  (`POST /api/v1/webhooks/test` or the console button) validates the endpoint for live readiness.
+
+Phases 6–8 (sandbox tools, live, reporting) follow the plan in the architecture doc.
 
 > Live payments are intentionally unreachable today: no live-capable payment provider is integrated yet (Phase 7 needs a
 > signed agreement with an RBI-authorised payment aggregator or acquiring bank), so the readiness checklist cannot complete.
@@ -82,7 +95,7 @@ cp .env.example .env
 .venv/bin/alembic upgrade head
 .venv/bin/python -m app.cli create-superadmin --email you@yourcompany.com --name "Your Name"   # prompts for password
 .venv/bin/uvicorn app.main:app --reload --port 8000
-.venv/bin/python -m app.workers                 # background jobs (payment/session expiry), in a second terminal
+.venv/bin/python -m app.workers                 # background jobs (expiry, status polling, webhook delivery), in a second terminal
 ```
 
 ### Frontend
@@ -124,6 +137,6 @@ so point it at a **dedicated test database**.
 ## Tests
 
 ```bash
-cd backend && .venv/bin/python -m pytest     # 149 tests: migrations, security, auth, RBAC, dashboard, merchant onboarding, payments, checkout
+cd backend && .venv/bin/python -m pytest     # 181 tests: migrations, security, auth, RBAC, dashboard, merchant onboarding, payments, checkout, verification, webhooks
 cd frontend && npm test
 ```

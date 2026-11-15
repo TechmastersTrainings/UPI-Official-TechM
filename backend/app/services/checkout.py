@@ -9,6 +9,7 @@ Rules:
 """
 
 import logging
+from datetime import timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,14 +21,13 @@ from app.models import Merchant, Payment, PaymentAttempt, ProviderConfiguration
 from app.models.enums import (
     AttemptStatus,
     Environment,
-    EventSource,
     MerchantStatus,
     PaymentStatus,
     ProviderConfigStatus,
 )
 from app.providers import registry
-from app.providers.base import PaymentSnapshot, ProviderError, ProviderState
-from app.services import payment_state, payments
+from app.providers.base import ProviderError
+from app.services import payment_state, payments, verification
 
 log = logging.getLogger(__name__)
 
@@ -50,14 +50,6 @@ def attempts(db: Session, payment_id: str) -> list[PaymentAttempt]:
         select(PaymentAttempt).where(PaymentAttempt.payment_id == payment_id)
         .order_by(PaymentAttempt.created_at, PaymentAttempt.id)
     ))
-
-
-def _snapshot(payment: Payment, merchant: Merchant) -> PaymentSnapshot:
-    return PaymentSnapshot(
-        payment_id=payment.id, merchant_reference=payment.merchant_reference, amount=payment.amount,
-        currency=payment.currency, payee_name=merchant.business_name, expires_at=payment.expires_at,
-        method=payment.payment_method,
-    )
 
 
 def _config_for(db: Session, payment: Payment) -> ProviderConfiguration:
@@ -98,7 +90,7 @@ def open_session(db: Session, payment: Payment, *, source: str) -> PaymentAttemp
     adapter = registry.get_adapter(config.provider.code, payment.environment, db_live_capable=config.provider.is_live_capable)
 
     try:
-        result = adapter.create_session(registry.context_for(config), _snapshot(payment, merchant))
+        result = adapter.create_session(registry.context_for(config), verification.snapshot(payment, merchant))
     except ProviderError as exc:
         db.rollback()
         db.add(PaymentAttempt(
@@ -115,6 +107,7 @@ def open_session(db: Session, payment: Payment, *, source: str) -> PaymentAttemp
         provider_session_ref=result.provider_session_ref, status=AttemptStatus.AWAITING_CUSTOMER,
         qr_payload=result.qr_payload, intent_uri=result.intent_uri, redirect_url=result.redirect_url,
         expires_at=min(result.expires_at, payment.expires_at), provider_response=result.raw,
+        next_poll_at=utcnow() + timedelta(seconds=verification.POLL_DELAYS[0]),
     )
     db.add(attempt)
     db.flush()
@@ -136,51 +129,28 @@ def open_session(db: Session, payment: Payment, *, source: str) -> PaymentAttemp
 
 def sync_expiry(db: Session, payment: Payment) -> Payment:
     """Expire an overdue payment. CREATED payments expire directly; payments with a provider session
-    expire only when the provider confirms the session closed with nothing collected."""
+    are settled by asking the provider (which may also report that the customer did pay)."""
     if payment.status == PaymentStatus.CREATED:
         return payments.expire_if_due(db, payment)
     if payment.status not in (PaymentStatus.INITIATED, PaymentStatus.PENDING) or payment.expires_at > utcnow():
         return payment
-    attempt = latest_attempt(db, payment.id)
-    if attempt is None or attempt.provider_session_ref is None:
-        return payment
-    try:
-        config = _config_for(db, payment)
-        merchant = db.get(Merchant, payment.merchant_id)
-        adapter = registry.get_adapter(config.provider.code, payment.environment,
-                                       db_live_capable=config.provider.is_live_capable)
-        status = adapter.fetch_status(registry.context_for(config), _snapshot(payment, merchant),
-                                      attempt.provider_session_ref, attempt.expires_at or payment.expires_at)
-    except (ProviderError, AppError) as exc:
-        log.warning("provider_status_unavailable", extra={"payment_id": payment.id, "error": str(exc)})
-        return payment
-    if status.state != ProviderState.EXPIRED:
-        # Any other answer (including success) is handled by the verification engine (Phase 5),
-        # which cross-checks amount, currency and references before a payment can succeed.
-        return payment
-    attempt.status = AttemptStatus.EXPIRED
-    payment_state.transition(db, payment, PaymentStatus.EXPIRED, source=EventSource.SYSTEM,
-                             payload={"provider_state": status.state.value, "attempt_id": attempt.id})
-    try:
-        db.commit()
-    except StaleDataError:
-        db.rollback()
-    db.refresh(payment)
-    return payment
+    attempt = verification.latest_session(db, payment.id)
+    return verification.poll(db, payment, attempt) if attempt else payment
 
 
 def expire_sessions_due(db: Session, *, batch_size: int = 100) -> int:
-    """Worker job: ask providers about overdue payments that have an open session."""
-    rows = db.scalars(
-        select(Payment)
+    """Worker job: overdue payments with an open session whose regular poll is not due yet."""
+    ids = list(db.scalars(
+        select(Payment.id)
         .where(Payment.status.in_([PaymentStatus.INITIATED, PaymentStatus.PENDING]), Payment.expires_at <= utcnow())
-        .order_by(Payment.expires_at).limit(batch_size).with_for_update(skip_locked=True)
-    ).all()
-    expired = 0
-    for p in rows:
-        if sync_expiry(db, p).status == PaymentStatus.EXPIRED:
-            expired += 1
+        .order_by(Payment.expires_at).limit(batch_size)
+    ))
     db.rollback()
+    expired = 0
+    for pid in ids:
+        p = db.get(Payment, pid)
+        if p is not None and sync_expiry(db, p).status == PaymentStatus.EXPIRED:
+            expired += 1
     return expired
 
 

@@ -14,7 +14,9 @@ from app.api.auth.routes import router as auth_router
 from app.api.admin.payments import router as admin_payments_router
 from app.api.merchant.payments import router as merchant_payments_router
 from app.api.merchant.routes import router as merchant_router
+from app.api.merchant.webhook_deliveries import router as webhook_deliveries_router
 from app.api.v1.checkout import router as checkout_router
+from app.api.v1.routes import callback_router
 from app.api.v1.routes import router as v1_router
 from app.core.config import get_settings
 from app.core.errors import install_exception_handlers
@@ -61,14 +63,15 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="TechMasters Payment Gateway API",
-        version="0.4.0",
+        version="0.5.0",
         description=(
             "Payment gateway platform owned and operated by TechMasters Innovations Private Limited.\n\n"
             "* `/api/auth` — dashboard authentication (JWT + rotating refresh cookie)\n"
             "* `/api/admin` — Super Admin console\n"
             "* `/api/merchant` — merchant console (registration, profile, bank accounts, providers, keys, webhooks)\n"
             "* `/api/v1` — merchant-facing gateway API (HTTP Basic: API key id + secret)\n"
-            "* `/api/v1/checkout` — public hosted checkout (checkout token in the link)\n\n"
+            "* `/api/v1/checkout` — public hosted checkout (checkout token in the link)\n"
+            "* `/api/v1/providers/{code}/callback` — provider notifications (provider signature)\n\n"
             "Amounts are integers in minor units (paise). Timestamps are UTC ISO-8601."
         ),
     )
@@ -119,9 +122,11 @@ def create_app() -> FastAPI:
     app.include_router(admin_merchants_router)
     app.include_router(merchant_router)
     app.include_router(merchant_payments_router)
+    app.include_router(webhook_deliveries_router)
     app.include_router(admin_payments_router)
     app.include_router(v1_router)
     app.include_router(checkout_router)
+    app.include_router(callback_router)
 
     @app.get("/health", tags=["Health"])
     def health():
