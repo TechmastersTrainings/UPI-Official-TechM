@@ -115,6 +115,10 @@ def transition(
         created_at=now,
     )
     db.add(event)
+    # Outbox: the merchant notification commits (or rolls back) together with the status change.
+    from app.services import webhooks
+
+    webhooks.enqueue_for_status(db, payment, target)
     return event
 
 

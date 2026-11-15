@@ -63,6 +63,8 @@ class Settings(BaseSettings):
     CHECKOUT_BASE_URL: str = ""
     CHECKOUT_RATE_LIMIT_PER_MINUTE: int = 120  # per client IP, public checkout endpoints
 
+    CALLBACK_RATE_LIMIT_PER_MINUTE: int = 600  # per source IP, provider callbacks
+
     # Background worker (python -m app.workers)
     WORKER_INTERVAL_SECONDS: int = 15
 

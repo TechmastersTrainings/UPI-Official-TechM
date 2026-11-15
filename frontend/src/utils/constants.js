@@ -21,6 +21,7 @@ export const WEBHOOK_EVENTS = [
   'payment.refund_initiated',
   'payment.refunded',
   'settlement.updated',
+  'payment.cancelled',
 ];
 
 export const INDIAN_STATES = [

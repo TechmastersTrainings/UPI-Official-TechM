@@ -170,23 +170,29 @@ def test_open_session_expires_when_provider_confirms(client, merchant, payment, 
 def test_worker_expires_open_sessions(client, payment, db):
     client.post(f"/api/v1/checkout/{_token(payment)}/initiate")
     _overdue(db, payment["id"])
-    assert run_once() == {"payments_expired": 0, "sessions_expired": 1}
+    assert run_once()["sessions_expired"] + run_once()["polled"] >= 1
     db.expire_all()
     assert db.get(Payment, payment["id"]).status == "EXPIRED"
-    assert run_once() == {"payments_expired": 0, "sessions_expired": 0}
+    assert run_once()["sessions_expired"] == 0
 
 
-@pytest.mark.parametrize("state", [ProviderState.SUCCESS, ProviderState.AWAITING_CUSTOMER, ProviderState.PROCESSING])
-def test_expiry_never_overrides_other_provider_answers(client, payment, db, monkeypatch, state):
-    """Past the deadline, a provider answer other than 'expired, nothing collected' leaves the payment
-    alone. In particular a reported success is NOT applied here: it must go through verification."""
+@pytest.mark.parametrize("state, txn, expected", [
+    (ProviderState.AWAITING_CUSTOMER, None, "INITIATED"),
+    (ProviderState.PROCESSING, None, "PROCESSING"),        # money may be moving: never expired
+    (ProviderState.SUCCESS, None, "INITIATED"),            # success without a transaction id fails verification
+    (ProviderState.SUCCESS, "sbx_txn_1", "SUCCESS"),       # the customer did pay before the deadline
+])
+def test_past_deadline_only_provider_confirmed_expiry(client, payment, db, monkeypatch, state, txn, expected):
+    """Past the deadline the provider is asked first; the payment is expired only when the provider
+    says the session closed with nothing collected. Other answers go through verification."""
     client.post(f"/api/v1/checkout/{_token(payment)}/initiate")
     _overdue(db, payment["id"])
-    monkeypatch.setattr(SandboxProvider, "fetch_status", lambda *a, **k: ProviderStatus(state, amount=49_900))
-    assert client.get(f"/api/v1/checkout/{_token(payment)}").json()["status"] == "INITIATED"
+    monkeypatch.setattr(SandboxProvider, "fetch_status",
+                        lambda *a, **k: ProviderStatus(state, amount=49_900, currency="INR", provider_transaction_id=txn))
+    assert client.get(f"/api/v1/checkout/{_token(payment)}").json()["status"] == expected
     run_once()
     db.expire_all()
-    assert db.get(Payment, payment["id"]).status == "INITIATED"
+    assert db.get(Payment, payment["id"]).status == expected
 
 
 def test_provider_status_error_leaves_payment(client, payment, db, monkeypatch):

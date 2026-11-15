@@ -5,7 +5,7 @@ const TONES = {
   FAILED: 'danger', REJECTED: 'danger', SUSPENDED: 'danger', MISMATCH: 'danger', INACTIVE: 'danger', LOCKED: 'danger',
   PENDING: 'warning', PROCESSING: 'warning', INITIATED: 'warning', CREATED: 'neutral', PENDING_REVIEW: 'warning',
   REFUND_PENDING: 'warning', PARTIALLY_REFUNDED: 'info', REFUNDED: 'info', INVESTIGATION_REQUIRED: 'danger',
-  EXPIRED: 'neutral', AWAITING_CUSTOMER: 'warning', CANCELLED: 'neutral', TEST: 'test', LIVE: 'live',
+  EXPIRED: 'neutral', AWAITING_CUSTOMER: 'warning', RETRYING: 'warning', CANCELLED: 'neutral', TEST: 'test', LIVE: 'live',
 };
 
 export default function StatusBadge({ status, label }) {

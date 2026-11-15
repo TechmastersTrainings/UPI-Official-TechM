@@ -76,6 +76,10 @@ class PaymentAttempt(Base, TimestampMixin):
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     provider_response: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # redacted snapshot
     error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Status polling schedule (verification worker). Polling stops once the attempt is final.
+    next_poll_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), index=True, nullable=True)
+    poll_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    last_polled_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 class Transaction(Base, TimestampMixin):
