@@ -7,6 +7,13 @@ import { humanize } from '../utils/format';
 // Navigation lists only modules whose backend endpoints exist. New phases add entries here.
 const NAV = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: '▦', perm: 'dashboard:view' },
+  { to: '/admin/merchants', label: 'Merchants', icon: '▤', perm: 'merchants:view' },
+  { to: '/merchant/overview', label: 'Overview', icon: '▦', perm: 'merchant:view' },
+  { to: '/merchant/profile', label: 'Business profile', icon: '▤', perm: 'merchant:view' },
+  { to: '/merchant/bank-accounts', label: 'Bank accounts', icon: '₹', perm: 'merchant:bank_view' },
+  { to: '/merchant/providers', label: 'Payment providers', icon: '⇄', perm: 'merchant:view' },
+  { to: '/merchant/api-keys', label: 'API keys', icon: '⚿', perm: 'merchant:keys_manage' },
+  { to: '/merchant/webhooks', label: 'Webhooks', icon: '↯', perm: 'merchant:webhooks_manage' },
   { to: '/admin/users', label: 'Platform users', icon: '◎', perm: 'platform_users:view' },
   { to: '/admin/audit-logs', label: 'Audit logs', icon: '≣', perm: 'audit:view' },
   { to: '/account', label: 'My account', icon: '⚙' },

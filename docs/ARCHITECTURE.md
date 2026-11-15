@@ -1,7 +1,7 @@
 # TechMasters Payment Gateway — Architecture
 
 Owner: TechMasters Innovations Private Limited
-Status: Phase 1 (Foundation) implemented. Later phases are specified here and built incrementally.
+Status: Phases 1 (Foundation) and 2 (Merchant management) implemented. Later phases are specified here and built incrementally.
 
 This document is the reference for the eight pre-implementation deliverables:
 directory structure, backend architecture, frontend architecture, database schema,
@@ -319,8 +319,8 @@ class PaymentProvider(Protocol):
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
-| **1 Foundation** | Structure, FastAPI, DB + Alembic, auth (JWT/refresh/RBAC/lockout/rate limit), audit log, platform users, Super Admin dashboard on real aggregates, React shell with theme | Tests green; login → dashboard works end-to-end |
-| 2 Merchant management | Registration, profile, bank accounts (encrypted), provider configs, API credentials, webhook config, admin approval | Merchant can self-register; admin approves; keys issued once |
+| **1 Foundation** ✅ | Structure, FastAPI, DB + Alembic, auth (JWT/refresh/RBAC/lockout/rate limit), audit log, platform users, Super Admin dashboard on real aggregates, React shell with theme | Tests green; login → dashboard works end-to-end |
+| **2 Merchant management** ✅ | Registration, profile, bank accounts (encrypted), provider configs, API credentials, webhook config, admin approval | Merchant can self-register; admin approves; keys issued once |
 | 3 Payment engine | `/api/v1` payments, idempotency, state machine, expiry, events | Concurrency + idempotency tests pass |
 | 4 UPI & checkout | Provider interface, sandbox adapter, QR/intent, hosted checkout + countdown | Checkout renders only server-verified states |
 | 5 Verification | Status polling worker, callback verification, ledger, outbound webhooks + retries | Duplicate callbacks are no-ops; webhooks signed + retried |

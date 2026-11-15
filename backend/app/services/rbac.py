@@ -2,21 +2,48 @@ from app.models.enums import RoleName
 
 
 class Perm:
+    # Platform (TechMasters staff)
     DASHBOARD_VIEW = "dashboard:view"
     AUDIT_VIEW = "audit:view"
     PLATFORM_USERS_VIEW = "platform_users:view"
     PLATFORM_USERS_MANAGE = "platform_users:manage"
+    MERCHANTS_VIEW = "merchants:view"
+    MERCHANTS_MANAGE = "merchants:manage"  # approve/suspend, verify bank accounts, approve provider onboarding
+    MERCHANTS_LIVE = "merchants:live"  # switch a merchant's live mode on/off
+    SENSITIVE_REVEAL = "sensitive:reveal"  # unmask bank account numbers (audited)
 
+    # Merchant console (always scoped to the user's own merchant)
+    M_VIEW = "merchant:view"
+    M_PROFILE_EDIT = "merchant:profile_edit"
+    M_BANK_VIEW = "merchant:bank_view"
+    M_BANK_MANAGE = "merchant:bank_manage"
+    M_BANK_REVEAL = "merchant:bank_reveal"
+    M_PROVIDERS_MANAGE = "merchant:providers_manage"
+    M_KEYS_MANAGE = "merchant:keys_manage"
+    M_WEBHOOKS_MANAGE = "merchant:webhooks_manage"
+    M_LOGS_VIEW = "merchant:logs_view"
+
+
+_SUPER = {
+    Perm.DASHBOARD_VIEW, Perm.AUDIT_VIEW, Perm.PLATFORM_USERS_VIEW, Perm.PLATFORM_USERS_MANAGE,
+    Perm.MERCHANTS_VIEW, Perm.MERCHANTS_MANAGE, Perm.MERCHANTS_LIVE, Perm.SENSITIVE_REVEAL,
+}
+_MERCHANT_ADMIN = {
+    Perm.M_VIEW, Perm.M_PROFILE_EDIT, Perm.M_BANK_VIEW, Perm.M_BANK_MANAGE, Perm.M_BANK_REVEAL,
+    Perm.M_PROVIDERS_MANAGE, Perm.M_KEYS_MANAGE, Perm.M_WEBHOOKS_MANAGE, Perm.M_LOGS_VIEW,
+}
 
 ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
-    RoleName.SUPER_ADMIN: frozenset(
-        {Perm.DASHBOARD_VIEW, Perm.AUDIT_VIEW, Perm.PLATFORM_USERS_VIEW, Perm.PLATFORM_USERS_MANAGE}
+    RoleName.SUPER_ADMIN: frozenset(_SUPER),
+    RoleName.PLATFORM_ADMIN: frozenset(
+        {Perm.DASHBOARD_VIEW, Perm.AUDIT_VIEW, Perm.PLATFORM_USERS_VIEW, Perm.MERCHANTS_VIEW, Perm.MERCHANTS_MANAGE}
     ),
-    RoleName.PLATFORM_ADMIN: frozenset({Perm.DASHBOARD_VIEW, Perm.AUDIT_VIEW, Perm.PLATFORM_USERS_VIEW}),
-    RoleName.PLATFORM_SUPPORT: frozenset({Perm.DASHBOARD_VIEW}),
-    RoleName.MERCHANT_ADMIN: frozenset(),
-    RoleName.MERCHANT_DEVELOPER: frozenset(),
-    RoleName.MERCHANT_VIEWER: frozenset(),
+    RoleName.PLATFORM_SUPPORT: frozenset({Perm.DASHBOARD_VIEW, Perm.MERCHANTS_VIEW}),
+    RoleName.MERCHANT_ADMIN: frozenset(_MERCHANT_ADMIN),
+    RoleName.MERCHANT_DEVELOPER: frozenset(
+        {Perm.M_VIEW, Perm.M_BANK_VIEW, Perm.M_KEYS_MANAGE, Perm.M_WEBHOOKS_MANAGE, Perm.M_LOGS_VIEW}
+    ),
+    RoleName.MERCHANT_VIEWER: frozenset({Perm.M_VIEW, Perm.M_BANK_VIEW, Perm.M_LOGS_VIEW}),
 }
 
 ROLE_DESCRIPTIONS = {

@@ -89,6 +89,7 @@ class ProviderConfiguration(Base, TimestampMixin):
     credentials_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default=ProviderConfigStatus.DRAFT, nullable=False)
     status_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     integration_tested_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     approved_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -98,6 +99,9 @@ class ProviderConfiguration(Base, TimestampMixin):
 
 class MerchantBankAccount(Base, TimestampMixin):
     __tablename__ = "merchant_bank_accounts"
+    __table_args__ = (
+        UniqueConstraint("merchant_id", "environment", "account_fingerprint", name="uq_bank_accounts_merchant_env_fingerprint"),
+    )
 
     id: Mapped[str] = id_column("bac")
     merchant_id: Mapped[str] = mapped_column(ForeignKey("merchants.id", ondelete="CASCADE"), index=True, nullable=False)
@@ -109,6 +113,8 @@ class MerchantBankAccount(Base, TimestampMixin):
     bank_name: Mapped[str] = mapped_column(String(150), nullable=False)
     account_number_enc: Mapped[str] = mapped_column(Text, nullable=False)
     account_number_last4: Mapped[str] = mapped_column(String(4), nullable=False)
+    # keyed_hash(IFSC + account number): detects duplicates without decrypting.
+    account_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     ifsc: Mapped[str] = mapped_column(String(11), nullable=False)
     upi_vpa: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -138,6 +144,7 @@ class ApiCredential(Base, TimestampMixin):
 
 class WebhookConfiguration(Base, TimestampMixin):
     __tablename__ = "webhook_configurations"
+    __table_args__ = (UniqueConstraint("merchant_id", "environment"),)
 
     id: Mapped[str] = id_column("whc")
     merchant_id: Mapped[str] = mapped_column(ForeignKey("merchants.id", ondelete="CASCADE"), index=True, nullable=False)
